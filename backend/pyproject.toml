@@ -1,0 +1,36 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "aiohttp>=3.12.15",
+    "alembic>=1.16.5",
+    "asyncpg>=0.30.0",
+    "beautifulsoup4>=4.13.5",
+    "email-validator>=2.3.0",
+    "fastapi[standard]>=0.116.2",
+    "feedparser>=6.0.12",
+    "loguru>=0.7.3",
+    "lxml>=6.0.1",
+    "passlib[bcrypt]>=1.7.4",
+    "pydantic-ai>=1.0.8",
+    "pydantic-settings>=2.10.1",
+    "python-dotenv>=1.1.1",
+    "python-jose[cryptography]>=3.5.0",
+    "python-multipart>=0.0.20",
+    "redis>=6.4.0",
+    "sqlalchemy[asyncio]>=2.0.43",
+    "temporalio>=1.17.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "mypy>=1.18.1",
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.13.0",
+]
