@@ -153,13 +153,13 @@ graph TB
     CONFIG_SVC --> LOGS
 
     %% Styling
-    classDef apiLayer fill:#e1f5fe
-    classDef serviceLayer fill:#f3e5f5
-    classDef temporalLayer fill:#e8f5e8
-    classDef processLayer fill:#fff3e0
-    classDef dataLayer fill:#fce4ec
-    classDef externalLayer fill:#f1f8e9
-    classDef observabilityLayer fill:#fff8e1
+    classDef apiLayer fill:#e1f5fe,color:#000000
+    classDef serviceLayer fill:#f3e5f5,color:#000000
+    classDef temporalLayer fill:#e8f5e8,color:#000000
+    classDef processLayer fill:#fff3e0,color:#000000
+    classDef dataLayer fill:#fce4ec,color:#000000
+    classDef externalLayer fill:#f1f8e9,color:#000000
+    classDef observabilityLayer fill:#fff8e1,color:#000000
 
     class APIGW,AUTH_API,USER_API,CONFIG_API,STATUS_API apiLayer
     class AUTH_SVC,USER_SVC,CONFIG_SVC,STATUS_SVC,EMAIL_SVC,CONTENT_SVC serviceLayer
@@ -218,7 +218,7 @@ lint:  ## Run linting checks
 	mypy app/
 
 format:  ## Format code with black and ruff
-	ruff --fix app/ tests/
+	ruff format app/ tests/
 
 clean:  ## Clean up temporary files
 	find . -type f -name "*.pyc" -delete
