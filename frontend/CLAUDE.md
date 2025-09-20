@@ -10,12 +10,12 @@ This document provides comprehensive guidance for developing the frontend of the
 graph TB
     %% User Layer
     USER[User Browser] --> APP[Svelte Application]
-    
+
     %% Application Shell
     subgraph "Svelte Application"
         ROUTER[SvelteKit Router]
         LAYOUT[App Layout]
-        
+
         subgraph "Pages/Routes"
             HOME[Home Page]
             AUTH[Authentication Pages]
@@ -24,7 +24,7 @@ graph TB
             PROFILE[Profile Management]
             STATUS[Status & Logs]
         end
-        
+
         subgraph "Shared Components"
             HEADER[Header Component]
             NAV[Navigation Component]
@@ -33,7 +33,7 @@ graph TB
             FORM_COMPONENTS[Form Components]
             NOTIFICATION[Notification System]
         end
-        
+
         subgraph "Feature Components"
             SOURCE_CONFIG[Source Configuration]
             INTEREST_PROFILE[Interest Profile Editor]
@@ -42,7 +42,7 @@ graph TB
             PREVIEW_DIGEST[Digest Preview]
         end
     end
-    
+
     %% State Management
     subgraph "State Management"
         AUTH_STORE[Authentication Store]
@@ -51,7 +51,7 @@ graph TB
         UI_STORE[UI State Store]
         NOTIFICATION_STORE[Notification Store]
     end
-    
+
     %% Services Layer
     subgraph "Service Layer"
         API_CLIENT[API Client]
@@ -60,13 +60,13 @@ graph TB
         VALIDATION_SERVICE[Validation Service]
         CACHE_SERVICE[Cache Service]
     end
-    
+
     %% External Integration
     subgraph "External APIs"
         BACKEND_API[Backend REST API]
         EMAIL_VERIFICATION[Email Verification]
     end
-    
+
     %% Build & Development
     subgraph "Build System"
         VITE[Vite Build Tool]
@@ -74,47 +74,47 @@ graph TB
         POSTCSS[PostCSS]
         TAILWIND[Tailwind CSS]
     end
-    
+
     %% Connections
     APP --> ROUTER
     ROUTER --> LAYOUT
     LAYOUT --> HEADER
     LAYOUT --> NAV
     LAYOUT --> FOOTER
-    
+
     ROUTER --> HOME
     ROUTER --> AUTH
     ROUTER --> DASHBOARD
     ROUTER --> CONFIG
     ROUTER --> PROFILE
     ROUTER --> STATUS
-    
+
     CONFIG --> SOURCE_CONFIG
     CONFIG --> INTEREST_PROFILE
     CONFIG --> DELIVERY_SETTINGS
     CONFIG --> SOURCE_VALIDATOR
     CONFIG --> PREVIEW_DIGEST
-    
+
     %% State connections
     AUTH --> AUTH_STORE
     DASHBOARD --> USER_STORE
     CONFIG --> CONFIG_STORE
     SOURCE_CONFIG --> CONFIG_STORE
-    
+
     %% Service connections
     AUTH_SERVICE --> AUTH_STORE
     CONFIG_SERVICE --> CONFIG_STORE
     API_CLIENT --> BACKEND_API
-    
+
     AUTH_SERVICE --> API_CLIENT
     CONFIG_SERVICE --> API_CLIENT
     VALIDATION_SERVICE --> API_CLIENT
-    
+
     %% Build system
     VITE --> PNPM
     VITE --> POSTCSS
     VITE --> TAILWIND
-    
+
     %% Styling
     classDef pageLayer fill:#e1f5fe
     classDef componentLayer fill:#f3e5f5
@@ -122,7 +122,7 @@ graph TB
     classDef serviceLayer fill:#fff3e0
     classDef externalLayer fill:#fce4ec
     classDef buildLayer fill:#f1f8e9
-    
+
     class HOME,AUTH,DASHBOARD,CONFIG,PROFILE,STATUS pageLayer
     class HEADER,NAV,FOOTER,MODAL,FORM_COMPONENTS,NOTIFICATION,SOURCE_CONFIG,INTEREST_PROFILE,DELIVERY_SETTINGS,SOURCE_VALIDATOR,PREVIEW_DIGEST componentLayer
     class AUTH_STORE,USER_STORE,CONFIG_STORE,UI_STORE,NOTIFICATION_STORE stateLayer
@@ -212,20 +212,20 @@ frontend/
 ├── tsconfig.json
 ├── .eslintrc.json
 ├── .prettierrc
-├── 
+├──
 ├── src/
 │   ├── app.d.ts                    # Global type definitions
 │   ├── app.html                    # HTML template
 │   ├── app.css                     # Global styles
 │   ├── hooks.client.js             # Client-side hooks
 │   ├── hooks.server.js             # Server-side hooks
-│   ├── 
+│   ├──
 │   ├── routes/                     # SvelteKit routes
 │   │   ├── +layout.svelte          # Root layout
 │   │   ├── +layout.js              # Layout data loading
 │   │   ├── +page.svelte            # Home page
 │   │   ├── +page.js                # Home page data
-│   │   ├── 
+│   │   ├──
 │   │   ├── auth/                   # Authentication routes
 │   │   │   ├── login/
 │   │   │   │   ├── +page.svelte
@@ -238,13 +238,13 @@ frontend/
 │   │   │   │   └── +page.js
 │   │   │   └── logout/
 │   │   │       └── +page.js
-│   │   ├── 
+│   │   ├──
 │   │   ├── dashboard/              # Main dashboard
 │   │   │   ├── +layout.svelte
 │   │   │   ├── +layout.js
 │   │   │   ├── +page.svelte
 │   │   │   └── +page.js
-│   │   ├── 
+│   │   ├──
 │   │   ├── configuration/          # Configuration pages
 │   │   │   ├── +layout.svelte
 │   │   │   ├── sources/
@@ -259,11 +259,11 @@ frontend/
 │   │   │   └── preview/
 │   │   │       ├── +page.svelte
 │   │   │       └── +page.js
-│   │   ├── 
+│   │   ├──
 │   │   ├── profile/                # User profile management
 │   │   │   ├── +page.svelte
 │   │   │   └── +page.js
-│   │   └── 
+│   │   └──
 │   │   └── status/                 # Delivery status and logs
 │   │       ├── +page.svelte
 │   │       └── +page.js
@@ -279,19 +279,19 @@ frontend/
 │   │   │   │   ├── Badge.svelte
 │   │   │   │   ├── Alert.svelte
 │   │   │   │   └── Spinner.svelte
-│   │   │   ├── 
+│   │   │   ├──
 │   │   │   ├── forms/              # Form-specific components
 │   │   │   │   ├── FormField.svelte
 │   │   │   │   ├── ValidationMessage.svelte
 │   │   │   │   └── FormGroup.svelte
-│   │   │   ├── 
+│   │   │   ├──
 │   │   │   ├── layout/             # Layout components
 │   │   │   │   ├── Header.svelte
 │   │   │   │   ├── Navigation.svelte
 │   │   │   │   ├── Sidebar.svelte
 │   │   │   │   ├── Footer.svelte
 │   │   │   │   └── Breadcrumbs.svelte
-│   │   │   ├── 
+│   │   │   ├──
 │   │   │   ├── features/           # Feature-specific components
 │   │   │   │   ├── SourceConfigForm.svelte
 │   │   │   │   ├── SourceList.svelte
@@ -301,7 +301,7 @@ frontend/
 │   │   │   │   ├── DigestPreview.svelte
 │   │   │   │   ├── DeliveryStatus.svelte
 │   │   │   │   └── UserProfile.svelte
-│   │   │   └── 
+│   │   │   └──
 │   │   │   └── common/             # Common utility components
 │   │   │       ├── ErrorBoundary.svelte
 │   │   │       ├── LoadingState.svelte
