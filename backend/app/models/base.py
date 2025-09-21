@@ -1,17 +1,16 @@
 from datetime import datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime
-from sqlalchemy.dialects.postgresql import UUID
-
-from app.database import Base
+from sqlmodel import Field, SQLModel
 
 
-class BaseModel(Base):
-    __abstract__ = True
+def utc_now() -> datetime:
+    return datetime.now(datetime.UTC)
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+
+class BaseModel(SQLModel):
+    id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime | None = Field(
+        default_factory=utc_now, sa_column_kwargs={"onupdate": utc_now}
     )

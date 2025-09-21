@@ -1,81 +1,68 @@
-from sqlalchemy import Boolean, Column, ForeignKey, String, Time
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from datetime import time
+from uuid import UUID
+
+from sqlmodel import Field, Relationship
 
 from app.models.base import BaseModel
 
 
-class User(BaseModel):
+class User(BaseModel, table=True):
     __tablename__ = "users"
 
-    email = Column(String, unique=True, nullable=False, index=True)
-    hashed_password = Column(String, nullable=False)
-    is_verified = Column(Boolean, default=False)
-    timezone = Column(String, nullable=False, default="UTC")
-    is_active = Column(Boolean, default=True)
+    email: str = Field(unique=True, index=True)
+    hashed_password: str
+    is_verified: bool = Field(default=False)
+    timezone: str = Field(default="UTC")
+    is_active: bool = Field(default=True)
 
-    digest_config = relationship(
-        "DigestConfiguration", back_populates="user", uselist=False
-    )
-    delivery_logs = relationship("DeliveryLog", back_populates="user")
+    digest_config: "DigestConfiguration | None" = Relationship(back_populates="user")
+    delivery_logs: list["DeliveryLog"] = Relationship(back_populates="user")
 
 
-class DigestConfiguration(BaseModel):
+class DigestConfiguration(BaseModel, table=True):
     __tablename__ = "digest_configurations"
 
-    user_id = Column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
-    )
-    delivery_time = Column(Time, nullable=False)
-    summary_style = Column(String, nullable=False, default="brief")
-    is_active = Column(Boolean, default=True)
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    delivery_time: time
+    summary_style: str = Field(default="brief")
+    is_active: bool = Field(default=True)
 
-    user = relationship("User", back_populates="digest_config")
-    sources = relationship("ContentSource", back_populates="config")
-    interest_profile = relationship(
-        "InterestProfile", back_populates="config", uselist=False
+    user: User | None = Relationship(back_populates="digest_config")
+    sources: list["ContentSource"] = Relationship(back_populates="config")
+    interest_profile: "InterestProfile | None" = Relationship(
+        back_populates="config"
     )
 
 
-class ContentSource(BaseModel):
+class ContentSource(BaseModel, table=True):
     __tablename__ = "content_sources"
 
-    config_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("digest_configurations.id"),
-        nullable=False,
-        index=True,
-    )
-    source_type = Column(String, nullable=False)
-    source_url = Column(String, nullable=False)
-    source_name = Column(String, nullable=False)
-    is_active = Column(Boolean, default=True)
+    config_id: UUID = Field(foreign_key="digest_configurations.id", index=True)
+    source_type: str
+    source_url: str
+    source_name: str
+    is_active: bool = Field(default=True)
 
-    config = relationship("DigestConfiguration", back_populates="sources")
+    config: DigestConfiguration | None = Relationship(back_populates="sources")
 
 
-class InterestProfile(BaseModel):
+class InterestProfile(BaseModel, table=True):
     __tablename__ = "interest_profiles"
 
-    config_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("digest_configurations.id"),
-        nullable=False,
-        index=True,
+    config_id: UUID = Field(foreign_key="digest_configurations.id", index=True)
+    keywords: str
+
+    config: DigestConfiguration | None = Relationship(
+        back_populates="interest_profile"
     )
-    keywords = Column(String, nullable=False)
-
-    config = relationship("DigestConfiguration", back_populates="interest_profile")
 
 
-class DeliveryLog(BaseModel):
+class DeliveryLog(BaseModel, table=True):
     __tablename__ = "delivery_logs"
 
-    user_id = Column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
-    )
-    status = Column(String, nullable=False)
-    article_count = Column(String, nullable=True)
-    error_message = Column(String, nullable=True)
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    status: str
+    article_count: str | None = None
+    error_message: str | None = None
 
-    user = relationship("User", back_populates="delivery_logs")
+    user: User | None = Relationship(back_populates="delivery_logs")
