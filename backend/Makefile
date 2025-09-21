@@ -1,3 +1,7 @@
+REVISION ?= head
+STEP     ?= 1
+MESSAGE  ?= ""
+
 .PHONY: help install start stop test lint format clean dev
 
 help:  ## Show this help message
@@ -50,3 +54,24 @@ logs:  ## Show service logs
 
 db-shell:  ## Connect to database shell
 	docker compose exec postgres psql -U periscope -d periscope
+
+mg:			# run database migration to the latest version
+	uv run alembic upgrade $(REVISION)
+
+mg-heads:	# list all heads
+	uv run alembic heads
+
+mg-down:	# run database migration to the latest version
+	uv run alembic downgrade -$(STEP)
+
+mg-rev:		# create a new migration revision
+	uv run alembic revision --autogenerate -m "$(MESSAGE)"
+
+mg-merge:	# merge all heads roughly, use with caution (should check the migration script)
+	@HEADS=$$(uv run alembic heads | cut -d ' ' -f1 | tr '\n' ' '); \
+	if [ -n "$$HEADS" ]; then \
+		echo "Merging Alembic heads: $$HEADS"; \
+		uv run alembic merge $$HEADS -m "$(MESSAGE)"; \
+	else \
+		echo "No multiple heads found."; \
+	fi
