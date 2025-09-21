@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -7,12 +9,20 @@ from app.api import auth, digest, health, users
 from app.config import settings
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):  # noqa: ARG001
+    logger.info("Starting Personal Daily Reading Digest Backend")
+    yield
+    logger.info("Shutting down Personal Daily Reading Digest Backend")
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         description="Backend API for Personal Daily Reading Digest",
         version="0.1.0",
         debug=settings.debug,
+        lifespan=lifespan,
     )
 
     app.add_middleware(
@@ -29,14 +39,6 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix="/auth", tags=["authentication"])
     app.include_router(users.router, prefix="/users", tags=["users"])
     app.include_router(digest.router, prefix="/digest", tags=["digest"])
-
-    @app.on_event("startup")
-    async def startup_event():
-        logger.info("Starting Personal Daily Reading Digest Backend")
-
-    @app.on_event("shutdown")
-    async def shutdown_event():
-        logger.info("Shutting down Personal Daily Reading Digest Backend")
 
     return app
 
