@@ -3,7 +3,7 @@
 
 # Basic settings
 target-version = "py313"
-line-length = 88
+line-length = 120
 indent-width = 4
 
 # Directories to check

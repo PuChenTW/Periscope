@@ -1,5 +1,7 @@
 FROM python:3.13-slim
 
+ENV UV_PROJECT_ENVIRONMENT="/usr/local/"
+
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
