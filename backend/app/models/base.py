@@ -1,16 +1,35 @@
 from datetime import datetime
-from uuid import UUID, uuid4
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, func
+from ulid import ULID
 
 
 def utc_now() -> datetime:
     return datetime.now(datetime.UTC)
 
 
-class BaseModel(SQLModel):
-    id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
-    created_at: datetime = Field(default_factory=utc_now)
-    updated_at: datetime | None = Field(
-        default_factory=utc_now, sa_column_kwargs={"onupdate": utc_now}
+class ULIDMixedIn:
+    """The MixedIn model for ULID as the primary key"""
+
+    id: str = Field(primary_key=True, default_factory=lambda: str(ULID()))
+
+
+class ActiveLifecycleTimestampMixin:
+    """MixedIn model create and update for timestamp"""
+
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        description="The timestamp when the record is created",
+        sa_column_kwargs={
+            "server_default": func.now(),
+        },
+    )
+
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        description="The timestamp when the record is updated",
+        sa_column_kwargs={
+            "server_default": func.now(),
+            "onupdate": utc_now,
+        },
     )

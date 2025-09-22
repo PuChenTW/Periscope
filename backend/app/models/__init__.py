@@ -1,4 +1,3 @@
-from app.models.base import BaseModel
 from app.models.users import (
     ContentSource,
     DeliveryLog,
@@ -8,7 +7,6 @@ from app.models.users import (
 )
 
 __all__ = [
-    "BaseModel",
     "ContentSource",
     "DeliveryLog",
     "DigestConfiguration",
