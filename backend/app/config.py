@@ -1,8 +1,10 @@
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
     app_name: str = "Personal Daily Reading Digest"
     debug: bool = Field(False, env="DEBUG")
 
@@ -19,10 +21,6 @@ class Settings(BaseSettings):
     smtp_password: str = Field("", env="SMTP_PASSWORD")
 
     cache_ttl_minutes: int = Field(60, env="CACHE_TTL_MINUTES")
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 settings = Settings()

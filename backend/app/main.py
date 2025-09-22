@@ -7,6 +7,7 @@ from loguru import logger
 
 from app.api import auth, digest, health, users
 from app.config import settings
+from app.middlewares import ORMSessionMiddleware
 
 
 @asynccontextmanager
@@ -34,6 +35,7 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
+    app.add_middleware(ORMSessionMiddleware)
 
     app.include_router(health.router, prefix="/health", tags=["health"])
     app.include_router(auth.router, prefix="/auth", tags=["authentication"])

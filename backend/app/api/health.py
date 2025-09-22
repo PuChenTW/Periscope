@@ -2,9 +2,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.database import get_db
+from app.api.basic import get_db_session
 from app.utils.cache import CacheProtocol, get_cache
 
 router = APIRouter()
@@ -17,11 +17,11 @@ async def health_check():
 
 @router.get("/ready")
 async def readiness_check(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
     cache: Annotated[CacheProtocol, Depends(get_cache)],
 ):
     try:
-        await db.execute(text("SELECT 1"))
+        await db.exec(text("SELECT 1"))
         await cache.set("health_check", "ok", ttl=10)
         cache_test = await cache.get("health_check")
 
