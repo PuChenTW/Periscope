@@ -15,6 +15,7 @@ dependencies = [
     "loguru>=0.7.3",
     "lxml>=6.0.1",
     "passlib[bcrypt]>=1.7.4",
+    "psycopg>=3.2.10",
     "pydantic-ai>=1.0.8",
     "pydantic-settings>=2.10.1",
     "python-dotenv>=1.1.1",
@@ -36,4 +37,8 @@ dev = [
     "pytest-asyncio>=1.2.0",
     "pytest-cov>=7.0.0",
     "ruff>=0.13.0",
+    "pytest-asyncio>=1.2.0",
+    "pytest-mock-resources>=2.12.4",
+    "pytest-xdist>=3.8.0",
+    "python-on-whales>=0.78.0",
 ]
