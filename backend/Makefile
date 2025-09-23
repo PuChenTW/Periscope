@@ -31,6 +31,10 @@ lint:  ## Run linting checks
 format:  ## Format code with ruff
 	uv run ruff format app/ tests/
 
+ruff-file: ## Format and fix a specific file with ruff (usage: make ruff-file FILE=path/to/file.py)
+	uv run ruff format $(FILE)
+	uv run ruff check --fix $(FILE)
+
 clean:  ## Clean up temporary files
 	find . -type f -name "*.pyc" -delete
 	find . -type d -name "__pycache__" -delete
