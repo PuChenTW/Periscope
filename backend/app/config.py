@@ -1,3 +1,5 @@
+from functools import cache
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -23,4 +25,6 @@ class Settings(BaseSettings):
     cache_ttl_minutes: int = Field(60, env="CACHE_TTL_MINUTES")
 
 
-settings = Settings()
+@cache
+def get_settings() -> Settings:
+    return Settings()

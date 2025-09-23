@@ -6,7 +6,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from loguru import logger
 
 from app.api import auth, digest, health, users
-from app.config import settings
+from app.config import get_settings
 from app.middlewares import ORMSessionMiddleware
 
 
@@ -19,10 +19,10 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title=settings.app_name,
+        title=get_settings().app_name,
         description="Backend API for Personal Daily Reading Digest",
         version="0.1.0",
-        debug=settings.debug,
+        debug=get_settings().debug,
         lifespan=lifespan,
     )
 
