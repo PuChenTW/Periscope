@@ -43,6 +43,3 @@ def create_app() -> FastAPI:
     app.include_router(digest.router, prefix="/digest", tags=["digest"])
 
     return app
-
-
-app = create_app()

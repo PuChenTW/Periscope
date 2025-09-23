@@ -39,9 +39,7 @@ clean:  ## Clean up temporary files
 
 dev:  ## Start development environment
 	docker compose up -d postgres
-	@echo "Waiting for database to be ready..."
-	@sleep 5
-	uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+	uv run uvicorn app.main:create_app --host 0.0.0.0 --port 8000 --reload
 
 build:  ## Build Docker images
 	docker compose build
