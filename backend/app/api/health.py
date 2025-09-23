@@ -1,6 +1,7 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
+from loguru import logger
 from sqlalchemy import text
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -30,5 +31,7 @@ async def readiness_check(
             "database": "connected",
             "cache": "connected" if cache_test == "ok" else "error",
         }
+
     except Exception as e:
-        return {"status": "not ready", "error": str(e)}
+        logger.error(f"Readiness check failed: {e}")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service not ready") from e
