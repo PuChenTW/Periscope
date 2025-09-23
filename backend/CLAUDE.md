@@ -170,90 +170,6 @@ graph TB
     class METRICS,LOGS,TEMPORAL_UI observabilityLayer
 ```
 
-## Development Environment Setup
-
-### Python Package Management with UV
-
-```
-# Use UV for fast, reliable Python package management
-install:
-	uv add packege_to_install
-
-install-dev:
-	uv add packege_to_install --dev
-
-sync:
-	uv sync
-```
-
-### Makefile Commands
-
-```makefile
-# Makefile for Personal Daily Reading Digest
-
-.PHONY: help install start stop test lint format clean
-
-help:  ## Show this help message
-	@echo "Available commands:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
-
-install:  ## Install dependencies with UV
-	uv sync
-
-start:  ## Start all services with Docker Compose
-	docker compose up -d
-	@echo "Services starting... Access API at http://localhost:8000"
-
-stop:  ## Stop all services
-	docker compose down
-
-restart:  ## Restart all services
-	docker compose restart
-
-test:  ## Run pytest test suite
-	pytest tests/ -v --cov=app --cov-report=html
-
-lint:  ## Run linting checks
-	ruff check app/ tests/
-	mypy app/
-
-format:  ## Format code with black and ruff
-	ruff format app/ tests/
-
-clean:  ## Clean up temporary files
-	find . -type f -name "*.pyc" -delete
-	find . -type d -name "__pycache__" -delete
-	find . -type d -name "*.egg-info" -exec rm -rf {} +
-	rm -rf .coverage htmlcov/ .pytest_cache/
-
-db-migrate:  ## Run database migrations
-	alembic upgrade head
-
-db-rollback:  ## Rollback last migration
-	alembic downgrade -1
-
-db-reset:  ## Reset database (WARNING: drops all data)
-	docker compose down -v
-	docker compose up -d postgres
-	sleep 5
-	alembic upgrade head
-
-temporal-ui:  ## Open Temporal Web UI
-	@echo "Opening Temporal UI at http://localhost:8233"
-	@which open >/dev/null && open http://localhost:8233 || echo "Navigate to http://localhost:8233"
-
-dev:  ## Start development environment
-	docker compose -f docker-compose.dev.yml up -d
-	uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-build:  ## Build Docker images
-	docker compose build
-
-health:  ## Check service health
-	curl -f http://localhost:8000/health || echo "API not responding"
-	curl -f http://localhost:8233/api/v1/namespaces || echo "Temporal not responding"
-```
-
 ## Project Structure
 
 ```
@@ -264,7 +180,7 @@ app/
 ├── database.py                # Database connection and session management
 ├── dependencies.py            # FastAPI dependencies
 ├── exceptions.py              # Custom exception classes
-├── middleware.py              # Custom middleware
+├── middlewares.py             # Custom middleware
 ├──
 ├── api/                       # API layer
 │   ├── __init__.py
@@ -346,332 +262,102 @@ app/
 ## Core Design Principles
 
 ### 1. Repository Pattern
-```python
-# Clean separation between business logic and data access
-class UserRepository:
-    async def create(self, user: UserCreate) -> User:
-        # Database operations
-        pass
-
-    async def get_by_email(self, email: str) -> Optional[User]:
-        # Query operations
-        pass
-
-class UserService:
-    def __init__(self, user_repo: UserRepository):
-        self.user_repo = user_repo
-
-    async def register_user(self, user_data: UserCreate) -> User:
-        # Business logic
-        return await self.user_repo.create(user_data)
-```
+Clean separation between business logic and data access layers. Repositories handle all database operations while services contain business logic. This pattern allows for easier testing and maintains single responsibility principle.
 
 ### 2. Dependency Injection
-```python
-# Use FastAPI's dependency injection system
-async def get_db() -> AsyncSession:
-    async with async_session() as session:
-        yield session
+Use FastAPI's dependency injection system to manage service dependencies. Database sessions are injected through middleware, and services are composed using dependency providers. This promotes loose coupling and testability.
 
-async def get_user_service(
-    db: AsyncSession = Depends(get_db)
-) -> UserService:
-    return UserService(UserRepository(db))
+### 3. Session Management with Middleware
+Custom ORM session middleware manages database sessions per request. Sessions are automatically created, managed, and cleaned up with proper error handling and rollback support. Dirty session detection prevents uncommitted changes.
 
-@router.post("/users/")
-async def create_user(
-    user_data: UserCreate,
-    user_service: UserService = Depends(get_user_service)
-):
-    return await user_service.register_user(user_data)
-```
-
-### 3. Error Handling Strategy
-```python
-# Custom exceptions for different error types
-class BusinessLogicError(Exception):
-    pass
-
-class ValidationError(BusinessLogicError):
-    pass
-
-class ExternalServiceError(Exception):
-    pass
-
-# Global exception handlers
-@app.exception_handler(ValidationError)
-async def validation_exception_handler(request, exc):
-    return JSONResponse(
-        status_code=400,
-        content={"error": "validation", "message": str(exc)}
-    )
-```
+### 4. Error Handling Strategy
+Implement hierarchical custom exceptions for different error types (business logic, validation, external services). Use global exception handlers to provide consistent API responses and proper HTTP status codes.
 
 ## Database Design Guidelines
 
 ### Schema Design Rules
-1. **Use UUIDs for primary keys** - Better for distributed systems
-2. **Include audit fields** - created_at, updated_at, created_by
-3. **Soft delete pattern** - Use deleted_at instead of hard deletes
+1. **Use ULIDs for primary keys** - Better for distributed systems, sortable by creation time
+2. **Include audit fields** - created_at, updated_at using mixins
+3. **Soft delete pattern** - Use deleted_at instead of hard deletes (future enhancement)
 4. **Proper indexing** - Index foreign keys and frequently queried fields
 5. **Constraints** - Use database constraints for data integrity
 
-### Key Entities
-```python
-# User model with proper relationships
-class User(Base):
-    id: UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    email: str = Column(String, unique=True, nullable=False, index=True)
-    is_verified: bool = Column(Boolean, default=False)
-    timezone: str = Column(String, nullable=False)
-    created_at: datetime = Column(DateTime, default=datetime.utcnow)
+### Base Model Patterns
+- **ULID Mixin**: Provides string-based primary keys that are sortable and distributed-system friendly
+- **Timestamp Mixin**: Automatic created_at and updated_at fields with database-level defaults
+- **SQLModel Integration**: Combine with SQLModel for type-safe ORM with automatic API schema generation
 
-    # Relationships
-    digest_config = relationship("DigestConfiguration", back_populates="user")
-    delivery_logs = relationship("DeliveryLog", back_populates="user")
-
-class DigestConfiguration(Base):
-    id: UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    user_id: UUID = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    delivery_time: time = Column(Time, nullable=False)
-    summary_style: str = Column(String, nullable=False)  # 'brief' or 'detailed'
-    is_active: bool = Column(Boolean, default=True)
-
-    # Relationships
-    user = relationship("User", back_populates="digest_config")
-    sources = relationship("ContentSource", back_populates="config")
-    interest_profile = relationship("InterestProfile", back_populates="config")
-```
+### Key Entity Relationships
+- **User**: Central entity with email-based authentication, timezone awareness, and verification status
+- **DigestConfiguration**: Per-user settings for delivery time, summary style, and source management
+- **ContentSource**: User-configured RSS feeds and blog URLs with validation status
+- **InterestProfile**: Keyword-based personalization with relevance scoring
 
 ## Temporal Workflow Design Patterns
 
 ### 1. Workflow Composition
-```python
-# Break complex workflows into smaller, reusable workflows
-@workflow.defn
-class DigestGenerationWorkflow:
-    @workflow.run
-    async def run(self, user_id: str) -> DigestResult:
-        # Orchestrate multiple sub-workflows
-        config = await workflow.execute_child_workflow(
-            FetchConfigurationWorkflow.run,
-            user_id
-        )
-
-        content = await workflow.execute_child_workflow(
-            ContentProcessingWorkflow.run,
-            config
-        )
-
-        return await workflow.execute_child_workflow(
-            EmailDeliveryWorkflow.run,
-            user_id, content
-        )
-```
+Break complex workflows into smaller, reusable child workflows. Use workflow orchestration to coordinate multiple sub-workflows for configuration fetching, content processing, and email delivery. This enables better fault isolation and reusability.
 
 ### 2. Activity Design Rules
-- **Idempotent**: Safe to retry
-- **Deterministic**: Same input = same output
-- **Single Responsibility**: One clear purpose
-- **Timeout Aware**: Always set appropriate timeouts
+- **Idempotent**: Safe to retry without side effects
+- **Deterministic**: Same input produces same output
+- **Single Responsibility**: One clear purpose per activity
+- **Timeout Aware**: Always set appropriate timeouts for different activity types
 
-### 3. Error Handling in Workflows
-```python
-# Implement proper retry policies and error handling
-@workflow.defn
-class ContentProcessingWorkflow:
-    @workflow.run
-    async def run(self, config: DigestConfig) -> ProcessedContent:
-        try:
-            return await workflow.execute_activity(
-                process_content,
-                config,
-                start_to_close_timeout=timedelta(minutes=10),
-                retry_policy=RetryPolicy(
-                    initial_interval=timedelta(seconds=30),
-                    maximum_attempts=3,
-                    backoff_coefficient=2.0
-                )
-            )
-        except ActivityError as e:
-            # Log error and return partial results
-            workflow.logger.error(f"Content processing failed: {e}")
-            return await self.fallback_processing(config)
-```
+### 3. Error Handling Strategies
+Implement proper retry policies with exponential backoff for transient failures. Use fallback processing for partial results when some sources fail. Design workflows to gracefully degrade rather than completely fail, ensuring digest delivery even with reduced content.
 
 ## Content Processing Architecture
 
 ### 1. Fetcher Pattern
-```python
-# Abstract base class for all content fetchers
-class ContentFetcher(ABC):
-    @abstractmethod
-    async def fetch(self, source: ContentSource) -> List[Article]:
-        pass
-
-    @abstractmethod
-    async def validate_source(self, source_url: str) -> bool:
-        pass
-
-# Factory pattern for fetcher selection
-class FetcherFactory:
-    @staticmethod
-    def get_fetcher(source_type: str) -> ContentFetcher:
-        fetchers = {
-            "rss": RSSFetcher(),
-            "blog": BlogScraper()
-        }
-        return fetchers.get(source_type)
-```
+Abstract base class design for content fetchers with pluggable implementations for RSS feeds and blog scraping. Use factory pattern for fetcher selection based on source type. Include source validation methods for configuration verification.
 
 ### 2. Processing Pipeline
-```python
-# Chain of responsibility pattern for content processing
-class ContentProcessor:
-    def __init__(self):
-        self.pipeline = [
-            ContentValidator(),
-            Deduplicator(),
-            Summarizer(),
-            PersonalizationEngine()
-        ]
-
-    async def process(self, articles: List[Article], config: UserConfig) -> ProcessedContent:
-        result = articles
-        for processor in self.pipeline:
-            result = await processor.process(result, config)
-        return result
-```
+Chain of responsibility pattern for content processing stages: validation, deduplication, summarization, and personalization. Each processor in the pipeline transforms the content before passing to the next stage, enabling modular and testable processing.
 
 ## Configuration Management
 
 ### Environment-based Configuration
-```python
-class Settings(BaseSettings):
-    # Database
-    database_url: str = Field(..., env="DATABASE_URL")
+Use Pydantic BaseSettings for type-safe configuration management. Key configuration categories:
+- **Database**: Connection URLs and pool settings
+- **Caching**: Redis connection and TTL settings
+- **Temporal**: Host, port, and namespace configuration
+- **External Services**: Email provider API keys and endpoints
+- **AI Services**: PydanticAI API keys and model settings
+- **Security**: JWT secrets, expiration times, and encryption keys
 
-    # Redis
-    redis_url: str = Field(..., env="REDIS_URL")
-
-    # Temporal
-    temporal_host: str = Field("localhost", env="TEMPORAL_HOST")
-    temporal_port: int = Field(7233, env="TEMPORAL_PORT")
-
-    # External Services
-    email_provider: str = Field("sendgrid", env="EMAIL_PROVIDER")
-    email_api_key: str = Field(..., env="EMAIL_API_KEY")
-
-    # AI Services
-    pydantic_ai_api_key: str = Field(..., env="PYDANTIC_AI_API_KEY")
-
-    # Security
-    secret_key: str = Field(..., env="SECRET_KEY")
-    jwt_expire_minutes: int = Field(30, env="JWT_EXPIRE_MINUTES")
-
-    class Config:
-        env_file = ".env"
-```
+Support for .env files and environment variable overrides with proper validation and type checking.
 
 ## Testing Strategy
 
 ### 1. Test Structure
-```
-tests/
-├── unit/                  # Unit tests for individual components
-│   ├── test_services.py
-│   ├── test_repositories.py
-│   └── test_processors.py
-├── integration/           # Integration tests
-│   ├── test_api.py
-│   ├── test_workflows.py
-│   └── test_database.py
-├── temporal/              # Temporal-specific tests
-│   ├── test_workflows.py
-│   └── test_activities.py
-└── fixtures/              # Test data and fixtures
-    ├── users.py
-    └── content.py
-```
+Organize tests into layers: unit tests for individual components, integration tests for component interactions, temporal-specific tests using Temporal's test framework, and shared fixtures for test data.
 
 ### 2. Testing Guidelines
-- **Unit Tests**: Test individual functions/methods in isolation
-- **Integration Tests**: Test component interactions
-- **Workflow Tests**: Use Temporal's test framework
-- **Database Tests**: Use test database with proper cleanup
-- **Mock External Services**: Don't hit real APIs in tests
+- **Unit Tests**: Test individual functions/methods in isolation with mocked dependencies
+- **Integration Tests**: Test component interactions including API endpoints and database operations
+- **Workflow Tests**: Use Temporal's test framework for workflow and activity testing
+- **Database Tests**: Use dedicated test database with proper cleanup between tests
+- **Mock External Services**: Avoid hitting real APIs in tests, use mocks for external dependencies
 
-### 3. Test Configuration
-```python
-# conftest.py
-@pytest.fixture
-async def test_db():
-    # Create test database
-    engine = create_async_engine(TEST_DATABASE_URL)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    yield engine
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
-@pytest.fixture
-def temporal_client():
-    # Return test Temporal client
-    return TemporalClient(host="localhost", port=7233)
-```
+### 3. Test Configuration Approach
+Use pytest-mock-resources for PostgreSQL test fixtures with pgvector support. Configure separate test databases per worker for parallel test execution. Implement proper session management with automatic cleanup and rollback on test failures.
 
 ## Performance and Monitoring
 
 ### 1. Caching Strategy
-- **Redis Usage**: Cache user configs, processed content (24h), API responses
-- **Cache Keys**: Structured naming convention (e.g., `user:config:{user_id}`)
-- **Cache Invalidation**: Event-based invalidation on configuration changes
+- **Redis Usage**: Cache user configurations, processed content (24h TTL), and API responses
+- **Cache Keys**: Structured naming convention for consistent access patterns
+- **Cache Invalidation**: Event-based invalidation triggered by configuration changes
 
 ### 2. Monitoring Points
-- **API Metrics**: Request count, response time, error rates
-- **Workflow Metrics**: Execution time, failure rates, retry counts
-- **Database Metrics**: Connection pool, query performance
-- **External Service Metrics**: API call success rates, response times
+- **API Metrics**: Request count, response time, error rates across endpoints
+- **Workflow Metrics**: Execution time, failure rates, retry counts for Temporal workflows
+- **Database Metrics**: Connection pool utilization and query performance
+- **External Service Metrics**: API call success rates and response times for external dependencies
 
 ### 3. Logging Standards
-```python
-# Structured logging with correlation IDs using Loguru
-from loguru import logger
-
-# Configure loguru logger
-logger.configure(
-    handlers=[
-        {
-            "sink": sys.stdout,
-            "format": "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {extra[user_id]} | {extra[operation]} | {message}",
-            "level": "INFO",
-            "serialize": False
-        },
-        {
-            "sink": "logs/app.log",
-            "format": "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {extra} | {message}",
-            "rotation": "1 day",
-            "retention": "30 days",
-            "level": "DEBUG"
-        }
-    ]
-)
-
-async def process_digest(user_id: str):
-    log = logger.bind(user_id=user_id, operation="digest_generation")
-    log.info("Starting digest generation")
-
-    try:
-        result = await generate_digest(user_id)
-        log.info("Digest generation completed",
-                article_count=len(result.articles))
-        return result
-    except Exception as e:
-        log.error("Digest generation failed", error=str(e))
-        raise
-```
+Use structured logging with Loguru for correlation IDs and contextual information. Configure separate handlers for console output (INFO level) and file logging (DEBUG level) with automatic rotation and retention policies. Include user IDs and operation context for request tracing.
 
 ## Security Considerations
 
