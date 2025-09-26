@@ -2,12 +2,12 @@
 Tests for HTTPClient utility
 """
 
+from http import HTTPStatus
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from aiohttp import ClientError, ClientResponse, ClientSession
+from aiohttp import ClientError, ClientResponse, ClientResponseError, ClientSession
 
-from app.processors.fetchers.exceptions import FetchTimeoutError, RateLimitError
 from app.processors.utils.http_client import HTTPClient
 
 
@@ -83,16 +83,22 @@ class TestHTTPClient:
     async def test_rate_limiting(self, http_client, mock_session):
         """Test rate limiting handling."""
         mock_response = AsyncMock(spec=ClientResponse)
-        mock_response.status = 429
+        mock_response.status = HTTPStatus.TOO_MANY_REQUESTS
         mock_response.headers = {"Retry-After": "1"}
+
+        # Mock raise_for_status to raise ClientResponseError for 429
+        rate_limit_error = ClientResponseError(
+            request_info=Mock(), history=(), status=HTTPStatus.TOO_MANY_REQUESTS, headers={"Retry-After": "1"}
+        )
+        mock_response.raise_for_status.side_effect = rate_limit_error
 
         mock_session.get.return_value.__aenter__.return_value = mock_response
 
         async with http_client:
-            with pytest.raises(RateLimitError) as exc_info:
+            with pytest.raises(ClientResponseError) as exc_info:
                 await http_client.fetch_text("https://example.com")
 
-            assert "Rate limited for URL" in str(exc_info.value)
+            assert exc_info.value.status == HTTPStatus.TOO_MANY_REQUESTS
 
     @pytest.mark.asyncio
     async def test_retry_on_timeout(self, http_client, mock_session):
@@ -132,7 +138,7 @@ class TestHTTPClient:
         mock_session.get.return_value.__aenter__ = timeout_side_effect
 
         async with http_client:
-            with pytest.raises(FetchTimeoutError):
+            with pytest.raises(TimeoutError):
                 await http_client.fetch_text("https://example.com")
 
     @pytest.mark.asyncio

@@ -1,10 +1,9 @@
 import asyncio
+from http import HTTPStatus
 
 import aiohttp
-from aiohttp import ClientError, ClientSession, ClientTimeout
+from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
 from loguru import logger
-
-from app.processors.fetchers.exceptions import FetchTimeoutError, RateLimitError
 
 
 class HTTPClient:
@@ -45,76 +44,50 @@ class HTTPClient:
             await self._session.close()
             self._session = None
 
-    async def fetch_text(self, url: str, headers: dict[str, str] | None = None) -> str:
-        """Fetch URL content as text."""
+    async def _make_request(self, url: str, headers: dict[str, str] | None = None):
+        """Make a single HTTP request."""
+        async with self._session.get(url, headers=headers) as response:
+            response.raise_for_status()
+            return response
+
+    async def _fetch_with_retry(self, url: str, headers: dict[str, str] | None = None, response_processor=None):
+        """Fetch with retry logic."""
         await self._ensure_session()
         assert self._session is not None
 
         last_exception: Exception | None = None
+
         for attempt in range(self.max_retries):
             try:
-                async with self._session.get(url, headers=headers) as response:
-                    if response.status == 429:
-                        retry_after = response.headers.get("Retry-After")
-                        if retry_after:
-                            await asyncio.sleep(float(retry_after))
-                        raise RateLimitError(f"Rate limited for URL: {url}")
+                response = await self._make_request(url, headers)
+                return await response_processor(response)
 
-                    response.raise_for_status()
-                    return await response.text()
-
-            except TimeoutError:
-                last_exception = FetchTimeoutError(f"Timeout fetching {url}")
-                logger.warning(f"Timeout on attempt {attempt + 1} for {url}")
-
-            except ClientError as e:
+            except (ClientResponseError, TimeoutError, ClientError) as e:
                 last_exception = e
-                logger.warning(f"Client error on attempt {attempt + 1} for {url}: {e}")
+                # Handle rate limiting with proper delay
+                if isinstance(e, ClientResponseError) and e.status == HTTPStatus.TOO_MANY_REQUESTS:
+                    retry_after = e.headers.get("Retry-After")
+                    if retry_after:
+                        await asyncio.sleep(float(retry_after))
+                logger.warning(f"Retryable error on attempt {attempt + 1} for {url}: {e}")
 
             except Exception as e:
                 last_exception = e
-                logger.error(f"Unexpected error on attempt {attempt + 1} for {url}: {e}")
+                logger.error(f"Non-retryable error on attempt {attempt + 1} for {url}: {e}")
+                break  # Don't retry non-retryable errors
 
             if attempt < self.max_retries - 1:
-                await asyncio.sleep(self.retry_delay * (2**attempt))
+                await asyncio.sleep(self.retry_delay)
 
-        if isinstance(last_exception, (FetchTimeoutError, RateLimitError)):
+        # Re-raise the original exception - no conversion needed
+        if last_exception:
             raise last_exception
-        raise Exception(f"Failed to fetch {url} after {self.max_retries} attempts: {last_exception}")
+        raise Exception(f"Failed to fetch {url} after {self.max_retries} attempts")
+
+    async def fetch_text(self, url: str, headers: dict[str, str] | None = None) -> str:
+        """Fetch URL content as text."""
+        return await self._fetch_with_retry(url, headers, lambda r: r.text())
 
     async def fetch_bytes(self, url: str, headers: dict[str, str] | None = None) -> bytes:
         """Fetch URL content as bytes."""
-        await self._ensure_session()
-        assert self._session is not None
-
-        last_exception: Exception | None = None
-        for attempt in range(self.max_retries):
-            try:
-                async with self._session.get(url, headers=headers) as response:
-                    if response.status == 429:
-                        retry_after = response.headers.get("Retry-After")
-                        if retry_after:
-                            await asyncio.sleep(float(retry_after))
-                        raise RateLimitError(f"Rate limited for URL: {url}")
-
-                    response.raise_for_status()
-                    return await response.read()
-
-            except TimeoutError:
-                last_exception = FetchTimeoutError(f"Timeout fetching {url}")
-                logger.warning(f"Timeout on attempt {attempt + 1} for {url}")
-
-            except ClientError as e:
-                last_exception = e
-                logger.warning(f"Client error on attempt {attempt + 1} for {url}: {e}")
-
-            except Exception as e:
-                last_exception = e
-                logger.error(f"Unexpected error on attempt {attempt + 1} for {url}: {e}")
-
-            if attempt < self.max_retries - 1:
-                await asyncio.sleep(self.retry_delay * (2**attempt))
-
-        if isinstance(last_exception, FetchTimeoutError):
-            raise last_exception
-        raise Exception(f"Failed to fetch {url} after {self.max_retries} attempts: {last_exception}")
+        return await self._fetch_with_retry(url, headers, lambda r: r.read())

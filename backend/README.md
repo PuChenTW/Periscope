@@ -11,7 +11,7 @@ This is the Phase 1 MVP backend for the Personal Daily Reading Digest platform, 
 - Mock API endpoints for authentication, user management, and digest operations
 - **RSS Feed Fetching Layer** (✅ **NEW - COMPLETED**)
   - RSS/Atom feed parsing and validation
-  - Async HTTP client with retry logic
+  - Simplified async HTTP client with streamlined retry logic and native aiohttp exception handling
   - Content extraction and metadata processing
   - Comprehensive test suite (73 tests passing)
 - Docker development environment
@@ -145,7 +145,7 @@ Current test coverage includes:
 - Mock data validation
 - Basic integration tests
 - **RSS Feed Fetching Layer** (✅ **NEW**)
-  - HTTP client functionality and error handling
+  - Simplified HTTP client with unified error handling and native aiohttp exceptions
   - URL validation and RSS feed parsing
   - Integration workflows and edge cases
 
@@ -198,16 +198,19 @@ The RSS Feed Fetching Layer provides robust content processing capabilities:
 ### Features
 - Support for RSS 2.0 and Atom 1.0 feeds
 - Automatic content type detection and validation
-- Robust error handling for malformed feeds and network issues
-- Configurable timeouts and retry logic
+- Simplified error handling using native aiohttp exceptions for better maintainability
+- Configurable timeouts and streamlined retry logic with fixed delays
 - HTML content cleaning and text normalization
+- Unified exception handling for HTTP errors, timeouts, and rate limiting
 
 ### Usage
 The layer includes factories for automatic fetcher creation and comprehensive content extraction with metadata processing. Supports both individual article fetching and bulk feed processing with graceful error recovery.
 
 ### Testing
 Comprehensive test suite with 73 passing tests covering:
-- Unit tests for HTTP client, URL validation, and RSS parsing
+- Unit tests for simplified HTTP client with native aiohttp exception handling
+- URL validation and RSS parsing functionality
 - Integration tests for end-to-end workflows
 - Edge case testing for malformed feeds and network failures
 - Mock strategies for reliable testing without external dependencies
+- Rate limiting and retry logic validation

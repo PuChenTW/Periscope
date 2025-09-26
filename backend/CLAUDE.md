@@ -275,7 +275,7 @@ Use FastAPI's dependency injection system to manage service dependencies. Databa
 Custom ORM session middleware manages database sessions per request. Sessions are automatically created, managed, and cleaned up with proper error handling and rollback support. Dirty session detection prevents uncommitted changes.
 
 ### 4. Error Handling Strategy
-Implement hierarchical custom exceptions for different error types (business logic, validation, external services). Use global exception handlers to provide consistent API responses and proper HTTP status codes.
+Implement hierarchical custom exceptions for different error types (business logic, validation, external services). Use global exception handlers to provide consistent API responses and proper HTTP status codes. For HTTP client operations, leverage native aiohttp exceptions (ClientResponseError, TimeoutError, ClientError) rather than custom wrapper exceptions to maintain simplicity and standard library compatibility.
 
 ## Database Design Guidelines
 
@@ -321,15 +321,16 @@ Complete implementation of RSS 2.0 and Atom 1.0 feed parsing with comprehensive 
 - **Base Fetcher Interface**: Abstract class defining standard fetcher methods for validation, content fetching, and metadata extraction
 - **RSS/Atom Parser**: Full-featured parser supporting both feed formats with graceful handling of malformed content
 - **Factory Pattern**: Automatic fetcher selection based on URL scheme and content type detection
-- **HTTP Client**: Async client with retry logic, rate limiting, and connection lifecycle management
+- **HTTP Client**: Simplified async client with streamlined retry logic, native aiohttp exception handling, and connection lifecycle management
 - **URL Validation**: Comprehensive validation utilities for feed URLs and health checking
 
 **Features:**
 - Support for RSS 2.0 and Atom 1.0 formats using feedparser library
-- Robust error handling with custom exception hierarchy
+- Simplified error handling using native aiohttp exceptions (ClientResponseError, TimeoutError, ClientError)
+- Unified exception handling with consolidated retry logic for better maintainability
 - Content cleaning and text normalization
 - Metadata extraction (author, tags, publish dates, feed info)
-- Configurable timeouts and retry policies
+- Streamlined retry policies with fixed delay backoff for predictable behavior
 - Comprehensive test suite with 73 passing tests covering unit, integration, and edge cases
 
 ### 2. Processing Pipeline (Planned for Phase 2)
@@ -359,7 +360,7 @@ Organize tests into layers: unit tests for individual components, integration te
 - **Workflow Tests**: Use Temporal's test framework for workflow and activity testing
 - **Database Tests**: Use dedicated test database with proper cleanup between tests
 - **Mock External Services**: Avoid hitting real APIs in tests, use mocks for external dependencies
-- **RSS Feed Processing Tests**: Comprehensive test suite covering HTTP client functionality, URL validation, RSS/Atom parsing, factory pattern, and error handling scenarios
+- **RSS Feed Processing Tests**: Comprehensive test suite covering simplified HTTP client with native aiohttp exceptions, URL validation, RSS/Atom parsing, factory pattern, and unified error handling scenarios
 
 ### 3. Test Configuration Approach
 Use pytest-mock-resources for PostgreSQL test fixtures with pgvector support. Configure separate test databases per worker for parallel test execution. Implement proper session management with automatic cleanup and rollback on test failures.
