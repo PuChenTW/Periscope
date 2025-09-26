@@ -40,6 +40,7 @@ def override_environment(database_url):
 
     os.environ["DEBUG"] = "true"
     os.environ["DATABASE_URL"] = database_url
+    # os.environ["SECRET_KEY"] = "test_secret"
 
     yield
 
