@@ -24,6 +24,13 @@ class Settings(BaseSettings):
 
     cache_ttl_minutes: int = Field(60, env="CACHE_TTL_MINUTES")
 
+    # RSS Fetcher Settings
+    rss_fetch_timeout: int = Field(30, env="RSS_FETCH_TIMEOUT")
+    rss_max_retries: int = Field(3, env="RSS_MAX_RETRIES")
+    rss_retry_delay: float = Field(1.0, env="RSS_RETRY_DELAY")
+    rss_max_articles_per_feed: int = Field(100, env="RSS_MAX_ARTICLES_PER_FEED")
+    rss_user_agent: str = Field("Periscope-Bot/1.0 (+https://periscope.ai/bot)", env="RSS_USER_AGENT")
+
 
 @cache
 def get_settings() -> Settings:
