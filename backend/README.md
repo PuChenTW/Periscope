@@ -4,11 +4,16 @@ This is the Phase 1 MVP backend for the Personal Daily Reading Digest platform, 
 
 ## Current Status
 
-**Completed Phase 1 MVP Features:**
+**Completed Phase 1+ Features:**
 - Core FastAPI application structure
 - Database models with SQLAlchemy (PostgreSQL ready)
 - Memory-based caching layer (Redis-compatible interface)
 - Mock API endpoints for authentication, user management, and digest operations
+- **RSS Feed Fetching Layer** (✅ **NEW - COMPLETED**)
+  - RSS/Atom feed parsing and validation
+  - Async HTTP client with retry logic
+  - Content extraction and metadata processing
+  - Comprehensive test suite (73 tests passing)
 - Docker development environment
 - Basic testing setup
 - Alembic migrations (ready for database setup)
@@ -19,6 +24,9 @@ This is the Phase 1 MVP backend for the Personal Daily Reading Digest platform, 
 app/
    api/            # API endpoints and routes
    models/         # SQLAlchemy database models
+   processors/     # Content processing engines (✅ NEW)
+      fetchers/    # RSS/Atom feed fetchers and factory
+      utils/       # HTTP client and validation utilities
    utils/          # Utilities (cache, logging, etc.)
    services/       # Business logic (planned for Phase 2)
    repositories/   # Data access layer (planned for Phase 2)
@@ -136,6 +144,10 @@ Current test coverage includes:
 - API endpoint functionality
 - Mock data validation
 - Basic integration tests
+- **RSS Feed Fetching Layer** (✅ **NEW**)
+  - HTTP client functionality and error handling
+  - URL validation and RSS feed parsing
+  - Integration workflows and edge cases
 
 ## Docker Setup
 
@@ -152,11 +164,9 @@ docker compose up -d  # All services in containers
 
 ## Next Phase (Phase 2)
 
-Phase 1 provides the foundation. Phase 2 will add:
-- Real authentication with JWT
+Phase 1+ provides the RSS fetching foundation. Phase 2 will add:
 - Business service layer implementation
-- RSS feed fetching and content processing
-- AI integration with PydanticAI
+- AI integration with PydanticAI for summarization
 - Temporal workflow implementation
 - Redis cache replacement
 - Email delivery service
@@ -180,3 +190,24 @@ Interactive API documentation is available at:
 - ReDoc: http://localhost:8000/redoc
 
 All endpoints return JSON and include proper OpenAPI specifications with request/response models.
+
+## RSS Feed Processing
+
+The RSS Feed Fetching Layer provides robust content processing capabilities:
+
+### Features
+- Support for RSS 2.0 and Atom 1.0 feeds
+- Automatic content type detection and validation
+- Robust error handling for malformed feeds and network issues
+- Configurable timeouts and retry logic
+- HTML content cleaning and text normalization
+
+### Usage
+The layer includes factories for automatic fetcher creation and comprehensive content extraction with metadata processing. Supports both individual article fetching and bulk feed processing with graceful error recovery.
+
+### Testing
+Comprehensive test suite with 73 passing tests covering:
+- Unit tests for HTTP client, URL validation, and RSS parsing
+- Integration tests for end-to-end workflows
+- Edge case testing for malformed feeds and network failures
+- Mock strategies for reliable testing without external dependencies
