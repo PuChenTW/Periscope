@@ -1,7 +1,7 @@
 """Add core data model
 
 Revision ID: 1e9bf615540f
-Revises: 
+Revises:
 Create Date: 2025-09-22 19:46:42.762381
 
 """

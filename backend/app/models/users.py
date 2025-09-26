@@ -1,4 +1,4 @@
-from datetime import time
+from datetime import datetime, time
 
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -18,9 +18,7 @@ class User(SQLModel, ULIDMixedIn, ActiveLifecycleTimestampMixin, table=True):
     delivery_logs: list["DeliveryLog"] = Relationship(back_populates="user")
 
 
-class DigestConfiguration(
-    SQLModel, ULIDMixedIn, ActiveLifecycleTimestampMixin, table=True
-):
+class DigestConfiguration(SQLModel, ULIDMixedIn, ActiveLifecycleTimestampMixin, table=True):
     __tablename__ = "digest_configurations"
 
     user_id: str = Field(foreign_key="users.id", index=True)
@@ -41,6 +39,13 @@ class ContentSource(SQLModel, ULIDMixedIn, ActiveLifecycleTimestampMixin, table=
     source_url: str
     source_name: str
     is_active: bool = Field(default=True)
+
+    # Validation fields
+    validation_status: str = Field(default="pending")  # pending, valid, invalid, error
+    last_validated_at: datetime | None = Field(default=None)
+    validation_error: str | None = Field(default=None)
+    last_fetch_at: datetime | None = Field(default=None)
+    last_fetch_count: int = Field(default=0)
 
     config: DigestConfiguration | None = Relationship(back_populates="sources")
 
