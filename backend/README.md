@@ -166,7 +166,7 @@ docker compose up -d  # All services in containers
 
 Phase 1+ provides the RSS fetching foundation. Phase 2 will add:
 - Business service layer implementation
-- AI integration with PydanticAI for summarization
+- AI integration with PydanticAI for similarity detection and summarization
 - Temporal workflow implementation
 - Redis cache replacement
 - Email delivery service

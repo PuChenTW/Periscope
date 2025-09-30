@@ -50,7 +50,7 @@ graph TB
         subgraph "Activities"
             FETCH_CONFIG_ACT[Fetch User Config Activity]
             FETCH_CONTENT_ACT[Fetch Content Activity]
-            DEDUP_ACT[Deduplication Activity]
+            SIMILARITY_ACT[Similarity Detection Activity]
             SUMMARIZE_ACT[Summarization Activity]
             PERSONALIZE_ACT[Personalization Activity]
             SEND_EMAIL_ACT[Send Email Activity]
@@ -59,7 +59,7 @@ graph TB
 
         DIGEST_WF --> FETCH_CONFIG_ACT
         DIGEST_WF --> FETCH_CONTENT_ACT
-        DIGEST_WF --> DEDUP_ACT
+        DIGEST_WF --> SIMILARITY_ACT
         DIGEST_WF --> SUMMARIZE_ACT
         DIGEST_WF --> PERSONALIZE_ACT
         DIGEST_WF --> SEND_EMAIL_ACT
@@ -74,7 +74,7 @@ graph TB
         RSS_PARSER[RSS Parser]
         BLOG_SCRAPER[Blog Scraper]
 
-        DEDUP_ENGINE[Deduplication Engine]
+        SIMILARITY_ENGINE[Similarity Detection & Grouping Engine]
         SIMILARITY_CALC[Similarity Calculator]
 
         AI_PROCESSOR[AI Processing Service]
@@ -126,8 +126,8 @@ graph TB
     RSS_PARSER --> RSS_FEEDS
     BLOG_SCRAPER --> BLOG_SOURCES
 
-    DEDUP_ACT --> DEDUP_ENGINE
-    DEDUP_ENGINE --> SIMILARITY_CALC
+    SIMILARITY_ACT --> SIMILARITY_ENGINE
+    SIMILARITY_ENGINE --> SIMILARITY_CALC
 
     SUMMARIZE_ACT --> AI_PROCESSOR
     PERSONALIZE_ACT --> AI_PROCESSOR
@@ -143,7 +143,7 @@ graph TB
     STATUS_REPO --> STATUS_SCHEMA
 
     CONTENT_FETCHER --> REDIS
-    DEDUP_ENGINE --> REDIS
+    SIMILARITY_ENGINE --> REDIS
     AI_PROCESSOR --> REDIS
 
     %% Monitoring connections
@@ -246,7 +246,7 @@ app/
 │   ├── ai/                   # AI processing (planned for Phase 2)
 │   │   ├── __init__.py
 │   │   ├── summarizer.py     # AI summarization
-│   │   ├── deduplicator.py   # Content deduplication
+│   │   ├── similarity_detector.py   # Content similarity detection and grouping
 │   │   └── scorer.py         # Relevance scoring
 │   └── utils/                # Processing utilities
 │       ├── __init__.py
@@ -334,7 +334,7 @@ Complete implementation of RSS 2.0 and Atom 1.0 feed parsing with comprehensive 
 - Comprehensive test suite with 73 passing tests covering unit, integration, and edge cases
 
 ### 2. Processing Pipeline (Planned for Phase 2)
-Chain of responsibility pattern for content processing stages: validation, deduplication, summarization, and personalization. Each processor in the pipeline transforms the content before passing to the next stage, enabling modular and testable processing.
+Chain of responsibility pattern for content processing stages: validation, similarity detection & grouping, summarization, and personalization. Each processor in the pipeline transforms the content before passing to the next stage, enabling modular and testable processing.
 
 ## Configuration Management
 

@@ -27,7 +27,7 @@ Based on the completed Phase 1+ MVP codebase, here's the current status and rema
 - ✅ **Comprehensive test suite** - 73 passing tests covering unit, integration, and edge cases
 
 ### 2. Content Processing Pipeline (`app/processors/`) - **NEXT PRIORITY**
-- **Deduplication engine** (`deduplicator.py`) using content similarity algorithms (text hashing, fuzzy matching)
+- **Similarity detection and grouping engine** (`similarity_detector.py`) using AI-powered semantic analysis to find and group related articles from different sources
 - **Content normalization** (`normalizer.py`) for standardizing article structure and metadata
 - **Text processing utilities** (`utils/text_processing.py`) for content cleaning and extraction
 
@@ -52,10 +52,10 @@ Based on the completed Phase 1+ MVP codebase, here's the current status and rema
 ### 6. Configuration and Dependencies
 - **Add RSS-specific settings** to `config.py` (fetch timeouts, retry policies, cache TTLs)
 - **Environment variables** for PydanticAI API keys and Temporal configuration
-- **Redis cache integration** for content caching and deduplication
+- **Redis cache integration** for content caching and similarity analysis results
 
 ### 7. Database Schema Updates
-- **Add content tracking tables** for processed articles and deduplication
+- **Add content tracking tables** for processed articles and similarity groupings
 - **Enhance ContentSource model** with validation status and metadata
 - **Create workflow execution logs** for monitoring and debugging
 
@@ -73,14 +73,15 @@ Based on the completed Phase 1+ MVP codebase, here's the current status and rema
 
 ## Key Technical Decisions
 - **Parallel processing**: Use Temporal activities for concurrent RSS fetching
-- **Caching strategy**: 24-hour TTL for processed content, permanent for deduplication hashes
+- **Caching strategy**: 24-hour TTL for processed content, caching for similarity analysis results
+- **Similarity detection**: AI-powered semantic analysis using PydanticAI with Gemini to group related articles rather than remove duplicates
 - **Error handling**: Graceful degradation with partial results rather than complete failure
 - **Scalability**: Repository pattern with async database operations
 - **AI integration**: Abstract PydanticAI service for easy model switching
 
 ## Dependencies & External Services
 - RSS feeds via HTTP requests with proper User-Agent and rate limiting
-- PydanticAI for summarization (requires API key configuration)
+- PydanticAI with Google Gemini for similarity detection and summarization (requires API key configuration)
 - Redis for caching and session management
 - Temporal server for workflow orchestration
 

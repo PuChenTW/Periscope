@@ -9,11 +9,11 @@ The Personal Daily Reading Digest is a content curation platform that helps busy
 - **Time-Saving**: Eliminates hours of manual browsing across multiple sources
 - **Personalized**: Uses interest profiles and source preferences to deliver relevant content
 - **Reliable**: Handles source failures gracefully and ensures consistent daily delivery
-- **Intelligent**: AI-powered summarization and deduplication for high-quality digests
+- **Intelligent**: AI-powered summarization and similarity detection for high-quality digests
 
 ## Primary User Story
 
-A busy professional configures their preferred news sources, blogs, and publication types, sets their delivery time (e.g., 7 AM), and chooses their summary style. Each morning, they receive a curated email digest containing the most relevant articles from the past 24 hours, with duplicates removed and direct links to original sources.
+A busy professional configures their preferred news sources, blogs, and publication types, sets their delivery time (e.g., 7 AM), and chooses their summary style. Each morning, they receive a curated email digest containing the most relevant articles from the past 24 hours, with similar articles grouped together and direct links to original sources.
 
 ## Technology Stack
 
@@ -56,7 +56,7 @@ graph TB
     %% Core Processing Components
     subgraph "Content Processing"
         FETCH[Content Fetcher]
-        DEDUP[Deduplication Engine]
+        SIMILARITY[Similarity Detection & Grouping Engine]
         SUMM[AI Summarization Service]
         RELEVANCE[Relevance Scorer]
     end
@@ -95,7 +95,7 @@ graph TB
 ### Content Processing Pipeline
 - **Source Validation** (FR-011): Lightweight availability checks
 - **Content Aggregation** (FR-005): Daily fetch from configured sources
-- **Deduplication** (FR-006): Remove duplicate/similar articles
+- **Similarity Detection & Grouping** (FR-006): Find and group similar articles using AI-powered semantic analysis
 - **AI Summarization**: Generate consistent summaries using PydanticAI
 - **Personalization** (FR-019-FR-023): Interest profile-based content prioritization
 
@@ -126,8 +126,8 @@ The content digest generation is orchestrated as a Temporal workflow to handle:
 ### Main Workflow Steps
 1. **Fetch User Configuration**: Retrieve sources, preferences, and interest profile
 2. **Parallel Content Fetching**: Get articles from all configured sources
-3. **Content Processing Pipeline**: Deduplication → Summarization → Personalization
-4. **Digest Assembly**: Create final email content with proper attribution
+3. **Content Processing Pipeline**: Similarity Detection & Grouping → Summarization → Personalization
+4. **Digest Assembly**: Create final email content with grouped similar articles and proper attribution
 5. **Email Delivery**: Send with retry logic and status tracking
 
 ## Data Architecture
@@ -166,7 +166,7 @@ The content digest generation is orchestrated as a Temporal workflow to handle:
 
 ### Phase 2: AI Integration
 - [ ] PydanticAI integration for summarization
-- [ ] Content deduplication engine
+- [ ] AI-powered similarity detection and grouping engine
 - [ ] Temporal workflow implementation
 
 ### Phase 3: User Management & Personalization
