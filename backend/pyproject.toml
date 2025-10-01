@@ -1,3 +1,9 @@
+[tool.uv]
+package = true
+
+[tool.setuptools]
+py-modules = ["app"]
+
 [project]
 name = "periscope-backend"
 version = "0.1.0"
