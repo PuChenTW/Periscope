@@ -13,6 +13,11 @@ class CacheProtocol(ABC):
         pass
 
     @abstractmethod
+    async def setex(self, key: str, ttl: int, value: str) -> bool:
+        """Set key with value and expiration time in seconds (Redis-compatible)."""
+        pass
+
+    @abstractmethod
     async def delete(self, key: str) -> bool:
         pass
 
@@ -34,11 +39,7 @@ class MemoryCache(CacheProtocol):
 
     def _cleanup_expired(self):
         current_time = time.time()
-        expired_keys = [
-            key
-            for key, expiry_time in self._expiry.items()
-            if expiry_time <= current_time
-        ]
+        expired_keys = [key for key, expiry_time in self._expiry.items() if expiry_time <= current_time]
         for key in expired_keys:
             self._cache.pop(key, None)
             self._expiry.pop(key, None)
@@ -55,6 +56,10 @@ class MemoryCache(CacheProtocol):
                 ttl = self.default_ttl
             self._expiry[key] = time.time() + ttl
             return True
+
+    async def setex(self, key: str, ttl: int, value: str) -> bool:
+        """Set key with value and expiration time in seconds (Redis-compatible)."""
+        return await self.set(key, value, ttl)
 
     async def delete(self, key: str) -> bool:
         with self._lock:
@@ -79,4 +84,9 @@ cache_instance: CacheProtocol = MemoryCache()
 
 
 async def get_cache() -> CacheProtocol:
+    return cache_instance
+
+
+def get_redis_client() -> CacheProtocol:
+    """Get cache client (Redis-compatible interface)."""
     return cache_instance

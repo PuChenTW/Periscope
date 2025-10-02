@@ -26,16 +26,37 @@ Based on the completed Phase 1+ MVP codebase, here's the current status and rema
 - ✅ **Custom exceptions** (`exceptions.py`) for comprehensive error handling hierarchy
 - ✅ **Comprehensive test suite** - 73 passing tests covering unit, integration, and edge cases
 
-### 2. Content Processing Pipeline (`app/processors/`) - **NEXT PRIORITY**
-- **Similarity detection and grouping engine** (`similarity_detector.py`) using AI-powered semantic analysis to find and group related articles from different sources
-- **Content normalization** (`normalizer.py`) for standardizing article structure and metadata
-- **Text processing utilities** (`utils/text_processing.py`) for content cleaning and extraction
+### ✅ 2. Content Processing Pipeline (`app/processors/`) - **COMPLETED**
+- ✅ **AI provider abstraction** (`ai_provider.py`) - **COMPLETED** - Pluggable AI model architecture for easy provider switching
+  - Protocol-based design with AIProvider interface
+  - GeminiProvider implementation for Google Gemini integration
+  - OpenAIProvider placeholder for future expansion
+  - Factory function for configuration-driven provider instantiation
+  - Dependency injection pattern for enhanced testability
+- ✅ **Similarity detection and grouping engine** (`similarity_detector.py`) - **COMPLETED** - AI-powered semantic analysis using configurable AI providers to find and group related articles from different sources
+  - Uses AI provider abstraction for flexibility
+  - Structured output with Pydantic models for type safety
+  - Connected components algorithm for efficient grouping
+  - Topic aggregation from all articles in groups - topics from Article.ai_topics field are merged and deduplicated
+  - Redis caching layer with 24-hour TTL for similarity results
+  - Comprehensive test suite (21 tests) with mock AI provider
+- ✅ **Topic extraction service** (`topic_extractor.py`) - **COMPLETED** - AI-powered key topic identification for article categorization and relevance scoring
+  - Uses AI provider abstraction for model flexibility
+  - Extracts 3-5 key topics/themes from article content
+  - Structured output with TopicExtractionResult Pydantic model
+  - Configurable max topics limit via TOPIC_EXTRACTION_MAX_TOPICS setting
+  - Graceful error handling with fallback to empty list
+  - Article model enhanced with ai_topics field for storing extracted topics
+  - Content truncation to 1000 characters for efficient token usage
+  - Comprehensive test suite (19 tests) with mock AI provider
+- **Content normalization** (`normalizer.py`) for standardizing article structure and metadata (planned)
+- **Text processing utilities** (`utils/text_processing.py`) for content cleaning and extraction (planned)
 
 *Note: Basic content cleaning and text normalization is already implemented in RSS fetcher*
 
-### 3. AI Integration Layer (`app/processors/ai/`)
-- **PydanticAI summarizer** (`summarizer.py`) with configurable summary styles (brief, detailed, bullet points)
-- **Relevance scorer** (`scorer.py`) using keyword matching and semantic analysis against interest profiles
+### 3. AI Integration Layer (Building on Provider Abstraction)
+- **PydanticAI summarizer** with configurable summary styles (brief, detailed, bullet points) - will use AI provider abstraction
+- **Relevance scorer** using keyword matching and semantic analysis against interest profiles - will use AI provider abstraction
 - **Content classifier** for categorizing articles by topic/type
 
 ### 4. Temporal Workflow Implementation (`app/temporal/`)
@@ -66,26 +87,30 @@ Based on the completed Phase 1+ MVP codebase, here's the current status and rema
 
 ### 9. Testing Strategy
 - ✅ **RSS Feed Fetching Tests** - Complete test suite with 73 passing tests covering HTTP client, URL validation, RSS parsing, factory pattern, and error handling
-- **Unit tests** for AI processors and remaining components
-- **Integration tests** for end-to-end content processing pipeline
-- **Temporal workflow tests** using the Temporal testing framework
-- **Mock external services** for reliable testing
+- ✅ **AI Provider & Similarity Tests** - Complete test suite with 21 passing tests using mock AI provider for deterministic results, including topic aggregation from grouped articles
+- ✅ **Topic Extraction Tests** - Complete test suite with 19 passing tests covering topic extraction, error handling, content validation, max topics enforcement, and content truncation
+- ✅ **Total Processor Tests** - ~149 comprehensive tests across all content processing components
+- **Unit tests** for remaining AI processors (summarization, relevance scoring) - planned
+- **Integration tests** for end-to-end content processing pipeline - planned
+- **Temporal workflow tests** using the Temporal testing framework - planned
+- **Mock external services** for reliable testing - implemented for AI providers
 
 ## Key Technical Decisions
 - **Parallel processing**: Use Temporal activities for concurrent RSS fetching
 - **Caching strategy**: 24-hour TTL for processed content, caching for similarity analysis results
-- **Similarity detection**: AI-powered semantic analysis using PydanticAI with Gemini to group related articles rather than remove duplicates
+- **Similarity detection**: AI-powered semantic analysis using configurable AI providers to group related articles rather than remove duplicates
+- **Topic aggregation**: Topics extracted per-article are merged across all articles in similarity groups for comprehensive categorization
 - **Error handling**: Graceful degradation with partial results rather than complete failure
 - **Scalability**: Repository pattern with async database operations
-- **AI integration**: Abstract PydanticAI service for easy model switching
+- **AI provider abstraction**: Protocol-based design for easy switching between AI models (Gemini, OpenAI, Anthropic, etc.) via configuration
 
 ## Dependencies & External Services
 - RSS feeds via HTTP requests with proper User-Agent and rate limiting
-- PydanticAI with Google Gemini for similarity detection and summarization (requires API key configuration)
+- PydanticAI with configurable AI providers (Google Gemini by default, OpenAI planned) for topic extraction, similarity detection, and summarization
 - Redis for caching and session management
 - Temporal server for workflow orchestration
 
-This plan builds directly on the existing Phase 1 foundation. **The RSS Feed Fetching Layer has been completed** and provides the core content acquisition capabilities needed for Phase 2.
+This plan builds directly on the existing Phase 1 foundation. **The RSS Feed Fetching Layer, AI Provider Abstraction, Similarity Detection Engine, and Topic Extraction Service have been completed**, providing comprehensive content acquisition and AI processing capabilities for Phase 2.
 
 ## Recent Implementation Summary
 
@@ -110,4 +135,135 @@ This plan builds directly on the existing Phase 1 foundation. **The RSS Feed Fet
 - `app/processors/utils/url_validation.py` - URL validation utilities
 - Complete test suite in `tests/test_processors/` directory
 
-**Next Phase Priority:** AI integration and Temporal workflow implementation can now build on this solid RSS fetching foundation.
+**Next Phase Priority:** AI summarization and Temporal workflow implementation can now build on this solid foundation.
+
+### ✅ AI Provider Abstraction - COMPLETED
+
+**Key Accomplishments:**
+- Protocol-based design for pluggable AI model architecture
+- GeminiProvider implementation for Google Gemini integration
+- OpenAIProvider placeholder for future expansion
+- Factory function for configuration-driven provider instantiation
+- Dependency injection pattern for enhanced testability
+- **All 21 similarity detector tests passing** with mock provider
+
+**Implementation Details:**
+- `AIProvider` protocol defines the interface for all providers
+- `create_ai_provider()` factory function instantiates providers based on configuration
+- `SimilarityDetector` now accepts optional `ai_provider` parameter for dependency injection
+- Tests use mock AI provider for deterministic, fast unit testing
+- Easy to extend with new providers (Anthropic, Cohere, etc.)
+
+**Configuration Added:**
+- `AI_PROVIDER` - Provider selection (gemini, openai, etc.) - default: "gemini"
+- `GEMINI_API_KEY` - API key for Google Gemini access
+- `GEMINI_MODEL` - Model to use (default "gemini-2.5-flash-lite")
+- `TOPIC_EXTRACTION_MAX_TOPICS` - Maximum topics to extract per article (default: 5)
+
+**Files Implemented:**
+- `app/processors/ai_provider.py` - AI provider abstraction and implementations
+- `app/config.py` - Updated with AI provider settings
+- `app/processors/similarity_detector.py` - Refactored to use AI provider abstraction
+- `tests/test_processors/test_similarity_detector.py` - Updated tests with mock provider
+
+### ✅ Similarity Detection and Grouping Engine - COMPLETED
+
+**Key Accomplishments:**
+- AI-powered semantic analysis using configurable AI providers
+- Structured output using Pydantic models (SimilarityScore, ArticleGroup)
+- Pairwise article comparison with AI reasoning and confidence scores
+- **Topic extraction and aggregation** - common topics from AI comparisons are preserved and aggregated in article groups
+- Graph-based connected components algorithm for efficient grouping
+- Redis caching layer with configurable TTL (default 24 hours)
+- Configurable similarity threshold (default 0.7)
+- Comprehensive error handling and fallback behavior
+- **21 test cases** covering all scenarios including edge cases and topic handling
+
+**Implementation Details:**
+- `SimilarityDetector` class orchestrates the similarity detection process
+- Uses AI provider abstraction for flexible model selection
+- `SimilarityScore` model provides structured AI output with confidence and reasoning
+- `ArticleGroup` model represents grouped articles with metadata and aggregated topics
+- Pairwise comparison with caching to avoid redundant AI calls
+- **Topic aggregation mechanism:**
+  - Topics are sourced from each article's `ai_topics` field (populated by TopicExtractor)
+  - When creating groups via connected components algorithm, all topics from articles in the group are collected
+  - Set-based deduplication ensures each topic appears only once per group
+  - Topics are sorted alphabetically for consistent ordering in final groups
+- Connected components algorithm efficiently groups transitive similarities
+- Graceful error handling: defaults to "not similar" on errors to avoid false grouping
+
+**Configuration Settings:**
+- `SIMILARITY_THRESHOLD` - Minimum confidence for considering articles similar (default 0.7)
+- `SIMILARITY_CACHE_TTL_MINUTES` - Cache duration for similarity results (default 1440 = 24h)
+- `SIMILARITY_BATCH_SIZE` - Batch size for processing (default 10)
+
+**Testing Approach:**
+- Unit tests using mock AI provider for deterministic results
+- Mock Redis cache for testing caching behavior
+- Edge case coverage: empty lists, single articles, all similar, none similar
+- Cache hit/miss scenarios validated
+- Error handling verified
+- **Topic aggregation tests:**
+  - `test_detect_similar_articles_preserves_topics` - Verifies topics from Article.ai_topics are preserved in groups
+  - `test_detect_similar_articles_aggregates_topics_from_multiple_pairs` - Tests topic aggregation when 3+ articles form a group
+  - `test_detect_similar_articles_deduplicates_topics` - Ensures duplicate topics are removed
+  - `test_single_article_empty_topics` - Verifies single-article groups handle empty topics correctly
+
+### ✅ Topic Extraction Service - COMPLETED
+
+**Key Accomplishments:**
+- AI-powered topic identification for article categorization and relevance scoring
+- Uses AI provider abstraction for model flexibility
+- Extracts 3-5 key topics/themes from article content
+- Structured output using Pydantic models (TopicExtractionResult)
+- Configurable max topics limit (default: 5)
+- Graceful error handling with fallback to empty list on failures
+- Content length validation and truncation (1000 chars) to manage token limits
+- Article model enhanced with ai_topics field
+- **19 comprehensive test cases** covering all scenarios and edge cases
+
+**Implementation Details:**
+- `TopicExtractor` class orchestrates topic extraction process
+- Uses AI provider abstraction for flexible model selection
+- `TopicExtractionResult` model provides structured AI output with topics and reasoning
+- System prompt guides AI to extract specific, meaningful topics (1-3 words each)
+- Enforces max topics limit even if AI returns more
+- Handles minimal/empty content gracefully (returns empty list)
+- Content truncation to 1000 characters for efficient token usage
+- **Article model updated:**
+  - Added `ai_topics: list[str] | None = None` field
+  - Docstring distinguishes source fields vs AI-enriched fields
+  - Topics stored for use by downstream processors (similarity detection, relevance scoring)
+
+**Configuration Settings:**
+- `TOPIC_EXTRACTION_MAX_TOPICS` - Maximum number of topics to extract (default: 5)
+
+**Testing Approach:**
+- Unit tests using mock AI provider for deterministic results
+- Edge case coverage: empty content, minimal content, very long content
+- Error handling verified (AI failures, timeouts)
+- Max topics enforcement validated
+- Content truncation behavior tested
+- Multiple independent article processing verified
+- **Key test scenarios:**
+  - `test_extract_topics_success` - Verifies successful topic extraction
+  - `test_extract_topics_max_limit_enforced` - Ensures max limit is enforced
+  - `test_extract_topics_minimal_content` - Handles insufficient content
+  - `test_extract_topics_ai_error_handling` - Graceful error handling
+  - `test_extract_topics_truncates_long_content` - Content truncation validation
+  - `test_custom_max_topics_setting` - Custom configuration support
+
+**Files Implemented:**
+- `app/processors/topic_extractor.py` - Topic extraction service
+- `app/processors/fetchers/base.py` - Updated Article model with ai_topics field
+- `app/config.py` - Added TOPIC_EXTRACTION_MAX_TOPICS setting
+- `tests/test_processors/test_topic_extractor.py` - Complete test suite (19 tests)
+
+**Integration with Content Pipeline:**
+- Topics extracted during article processing, stored in Article.ai_topics field
+- Can be used by similarity detector to enhance grouping decisions
+- Will be used by relevance scorer for interest profile matching
+- Enables content categorization and filtering in digest generation
+
+**Next Phase Priority:** AI summarization service and relevance scoring to complete Phase 2 content processing pipeline.

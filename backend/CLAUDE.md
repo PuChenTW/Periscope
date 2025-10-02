@@ -234,8 +234,11 @@ app/
 │       ├── email.py          # Email activities
 │       └── validation.py     # Validation activities
 │
-├── processors/                # Content processing engines (✅ RSS FETCHING IMPLEMENTED)
+├── processors/                # Content processing engines (✅ COMPLETED)
 │   ├── __init__.py
+│   ├── ai_provider.py        # AI provider abstraction (✅ IMPLEMENTED)
+│   ├── similarity_detector.py # Similarity detection & grouping (✅ IMPLEMENTED)
+│   ├── topic_extractor.py    # Topic extraction service (✅ IMPLEMENTED)
 │   ├── fetchers/              # Content fetchers with pluggable implementations
 │   │   ├── __init__.py
 │   │   ├── base.py           # Abstract base fetcher interface (✅ IMPLEMENTED)
@@ -243,16 +246,10 @@ app/
 │   │   ├── factory.py        # Fetcher factory pattern (✅ IMPLEMENTED)
 │   │   ├── exceptions.py     # Custom fetcher exceptions (✅ IMPLEMENTED)
 │   │   └── blog.py           # Blog scraper (planned for future)
-│   ├── ai/                   # AI processing (planned for Phase 2)
-│   │   ├── __init__.py
-│   │   ├── summarizer.py     # AI summarization
-│   │   ├── similarity_detector.py   # Content similarity detection and grouping
-│   │   └── scorer.py         # Relevance scoring
 │   └── utils/                # Processing utilities
 │       ├── __init__.py
 │       ├── http_client.py    # HTTP client with retry logic (✅ IMPLEMENTED)
 │       ├── url_validation.py # URL validation utilities (✅ IMPLEMENTED)
-│       ├── similarity.py     # Similarity calculation (planned)
 │       └── text_processing.py # Text utilities (planned)
 │
 └── utils/                     # Utilities and helpers
@@ -333,8 +330,59 @@ Complete implementation of RSS 2.0 and Atom 1.0 feed parsing with comprehensive 
 - Streamlined retry policies with fixed delay backoff for predictable behavior
 - Comprehensive test suite with 73 passing tests covering unit, integration, and edge cases
 
-### 2. Processing Pipeline (Planned for Phase 2)
-Chain of responsibility pattern for content processing stages: validation, similarity detection & grouping, summarization, and personalization. Each processor in the pipeline transforms the content before passing to the next stage, enabling modular and testable processing.
+### 2. AI Provider Abstraction (✅ IMPLEMENTED)
+
+Pluggable AI model architecture enabling easy switching between different AI providers.
+
+**Key Components:**
+- **AIProvider Protocol**: Interface defining the `create_agent()` method for provider implementations
+- **GeminiProvider**: Implementation for Google Gemini models with PydanticAI integration
+- **OpenAIProvider**: Placeholder for future OpenAI integration
+- **Factory Function**: `create_ai_provider()` for configuration-driven provider instantiation
+
+**Features:**
+- Protocol-based design for extensibility
+- Configuration-driven model selection via `AI_PROVIDER` environment variable
+- Dependency injection pattern for enhanced testability
+- Easy addition of new providers (Anthropic, Cohere, etc.)
+- All 17 similarity detector tests passing with mock provider
+
+**Implementation Details:**
+- Located in `app/processors/ai_provider.py`
+- Used by `SimilarityDetector` for AI-powered semantic analysis
+- Provider instances are created once and reused throughout the detection pipeline
+- Tests mock the provider interface for deterministic unit testing
+
+### 3. Similarity Detection & Grouping Engine (✅ IMPLEMENTED)
+
+AI-powered semantic analysis to detect and group similar articles from different sources using the AI provider abstraction.
+
+**Key Features:**
+- Uses configurable AI providers via the abstraction layer
+- Pairwise article comparison with structured AI output
+- Connected components algorithm for efficient grouping
+- Topic aggregation from all articles in groups (sourced from Article.ai_topics field)
+- Redis caching (24-hour TTL) to avoid redundant AI calls
+- Configurable similarity threshold (default: 0.7)
+- Graceful error handling with fallback behavior
+- Comprehensive test suite (21 tests)
+
+### 4. Topic Extraction Service (✅ IMPLEMENTED)
+
+AI-powered topic identification for article categorization and relevance scoring.
+
+**Key Features:**
+- Uses configurable AI providers via the abstraction layer
+- Extracts 3-5 key topics/themes from article content
+- Structured output using Pydantic models (TopicExtractionResult)
+- Configurable max topics limit (default: 5, via TOPIC_EXTRACTION_MAX_TOPICS)
+- Content truncation to 1000 characters for efficient token usage
+- Graceful error handling with fallback to empty list
+- Article model enhanced with ai_topics field for storing extracted topics
+- Comprehensive test suite (19 tests)
+
+### 5. Processing Pipeline (Planned for Phase 2)
+Chain of responsibility pattern for content processing stages: validation, topic extraction (✅ complete), similarity detection (✅ complete), summarization, and personalization. Each processor in the pipeline transforms the content before passing to the next stage, enabling modular and testable processing.
 
 ## Configuration Management
 
@@ -344,7 +392,15 @@ Use Pydantic BaseSettings for type-safe configuration management. Key configurat
 - **Caching**: Redis connection and TTL settings
 - **Temporal**: Host, port, and namespace configuration
 - **External Services**: Email provider API keys and endpoints
-- **AI Services**: PydanticAI API keys and model settings
+- **AI Provider Settings**:
+  - `AI_PROVIDER`: Provider selection (gemini, openai, etc.)
+  - `GEMINI_API_KEY`: Google Gemini API key
+  - `GEMINI_MODEL`: Model name (default: gemini-2.5-flash-lite)
+- **Similarity Detection**:
+  - `SIMILARITY_THRESHOLD`: Minimum confidence (default: 0.7)
+  - `SIMILARITY_CACHE_TTL_MINUTES`: Cache duration (default: 1440)
+- **Topic Extraction**:
+  - `TOPIC_EXTRACTION_MAX_TOPICS`: Maximum topics per article (default: 5)
 - **Security**: JWT secrets, expiration times, and encryption keys
 
 Support for .env files and environment variable overrides with proper validation and type checking.
@@ -360,7 +416,11 @@ Organize tests into layers: unit tests for individual components, integration te
 - **Workflow Tests**: Use Temporal's test framework for workflow and activity testing
 - **Database Tests**: Use dedicated test database with proper cleanup between tests
 - **Mock External Services**: Avoid hitting real APIs in tests, use mocks for external dependencies
-- **RSS Feed Processing Tests**: Comprehensive test suite covering simplified HTTP client with native aiohttp exceptions, URL validation, RSS/Atom parsing, factory pattern, and unified error handling scenarios
+- **RSS Feed Processing Tests**: Comprehensive test suite covering simplified HTTP client with native aiohttp exceptions, URL validation, RSS/Atom parsing, factory pattern, and unified error handling scenarios (73 tests)
+- **AI Provider Tests**: Mock AI provider interface for deterministic testing of similarity detection and topic extraction without calling real AI APIs
+- **Similarity Detection Tests**: Complete test suite with mock AI provider for grouping logic, topic aggregation, and caching behavior (21 tests)
+- **Topic Extraction Tests**: Complete test suite covering topic extraction, error handling, content validation, and max topics enforcement (19 tests)
+- **Total Processor Tests**: ~149 comprehensive tests across all content processing components
 
 ### 3. Test Configuration Approach
 Use pytest-mock-resources for PostgreSQL test fixtures with pgvector support. Configure separate test databases per worker for parallel test execution. Implement proper session management with automatic cleanup and rollback on test failures.

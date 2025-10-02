@@ -9,11 +9,28 @@ This is the Phase 1 MVP backend for the Personal Daily Reading Digest platform, 
 - Database models with SQLAlchemy (PostgreSQL ready)
 - Memory-based caching layer (Redis-compatible interface)
 - Mock API endpoints for authentication, user management, and digest operations
-- **RSS Feed Fetching Layer** (✅ **NEW - COMPLETED**)
+- **RSS Feed Fetching Layer** (✅ **COMPLETED**)
   - RSS/Atom feed parsing and validation
   - Simplified async HTTP client with streamlined retry logic and native aiohttp exception handling
   - Content extraction and metadata processing
   - Comprehensive test suite (73 tests passing)
+- **AI Provider Abstraction** (✅ **COMPLETED**)
+  - Pluggable AI model architecture for easy provider switching
+  - Protocol-based design with GeminiProvider implementation
+  - Configuration-driven model selection
+  - Enhanced testability with dependency injection
+- **Similarity Detection & Grouping Engine** (✅ **COMPLETED**)
+  - AI-powered semantic analysis for detecting similar articles
+  - Connected components algorithm for efficient grouping
+  - Topic aggregation from grouped articles
+  - Redis caching with 24-hour TTL
+  - Comprehensive test suite (21 tests passing)
+- **Topic Extraction Service** (✅ **COMPLETED**)
+  - AI-powered key topic identification for articles
+  - Structured output with Pydantic models
+  - Configurable max topics limit (default: 5)
+  - Article model enhanced with ai_topics field
+  - Comprehensive test suite (19 tests passing)
 - Docker development environment
 - Basic testing setup
 - Alembic migrations (ready for database setup)
@@ -24,9 +41,12 @@ This is the Phase 1 MVP backend for the Personal Daily Reading Digest platform, 
 app/
    api/            # API endpoints and routes
    models/         # SQLAlchemy database models
-   processors/     # Content processing engines (✅ NEW)
+   processors/     # Content processing engines (✅ COMPLETED)
       fetchers/    # RSS/Atom feed fetchers and factory
       utils/       # HTTP client and validation utilities
+      ai_provider.py        # AI provider abstraction (✅ COMPLETED)
+      similarity_detector.py # Similarity detection engine (✅ COMPLETED)
+      topic_extractor.py    # Topic extraction service (✅ COMPLETED)
    utils/          # Utilities (cache, logging, etc.)
    services/       # Business logic (planned for Phase 2)
    repositories/   # Data access layer (planned for Phase 2)
@@ -144,10 +164,11 @@ Current test coverage includes:
 - API endpoint functionality
 - Mock data validation
 - Basic integration tests
-- **RSS Feed Fetching Layer** (✅ **NEW**)
-  - Simplified HTTP client with unified error handling and native aiohttp exceptions
-  - URL validation and RSS feed parsing
-  - Integration workflows and edge cases
+- **Content Processing Engines** (~149 total processor tests)
+  - RSS Feed Fetching Layer (73 tests)
+  - Similarity Detection & Grouping (21 tests)
+  - Topic Extraction Service (19 tests)
+  - HTTP client, URL validation, and integration workflows
 
 ## Docker Setup
 
@@ -164,11 +185,11 @@ docker compose up -d  # All services in containers
 
 ## Next Phase (Phase 2)
 
-Phase 1+ provides the RSS fetching foundation. Phase 2 will add:
+Phase 1+ provides complete content processing foundation. Phase 2 will add:
 - Business service layer implementation
-- AI integration with PydanticAI for similarity detection and summarization
-- Temporal workflow implementation
-- Redis cache replacement
+- AI-powered summarization and relevance scoring
+- Temporal workflow implementation for digest generation
+- Redis cache integration
 - Email delivery service
 
 ## Environment Variables
@@ -178,9 +199,25 @@ Key configuration options:
 DATABASE_URL=postgresql+asyncpg://user:pass@host:port/db
 SECRET_KEY=your-secret-key
 DEBUG=true
+
+# AI Provider Configuration
+AI_PROVIDER=gemini                    # AI provider: gemini, openai (default: gemini)
+GEMINI_API_KEY=your-gemini-api-key   # Google Gemini API key
+GEMINI_MODEL=gemini-2.5-flash-lite   # Gemini model name
+
+# Email Configuration
 EMAIL_PROVIDER=smtp
 SMTP_HOST=localhost
+
+# Cache Configuration
 CACHE_TTL_MINUTES=60
+
+# Similarity Detection Settings
+SIMILARITY_THRESHOLD=0.7             # Minimum confidence for similar articles
+SIMILARITY_CACHE_TTL_MINUTES=1440    # Cache TTL for similarity results (24h)
+
+# Topic Extraction Settings
+TOPIC_EXTRACTION_MAX_TOPICS=5       # Maximum topics to extract per article
 ```
 
 ## API Documentation
@@ -191,26 +228,34 @@ Interactive API documentation is available at:
 
 All endpoints return JSON and include proper OpenAPI specifications with request/response models.
 
-## RSS Feed Processing
+## Content Processing Pipeline
 
-The RSS Feed Fetching Layer provides robust content processing capabilities:
+The content processing layer provides comprehensive RSS fetching, AI-powered analysis, and intelligent article grouping:
 
-### Features
+### RSS Feed Fetching
 - Support for RSS 2.0 and Atom 1.0 feeds
-- Automatic content type detection and validation
-- Simplified error handling using native aiohttp exceptions for better maintainability
-- Configurable timeouts and streamlined retry logic with fixed delays
+- Simplified async HTTP client with retry logic and native aiohttp exception handling
 - HTML content cleaning and text normalization
-- Unified exception handling for HTTP errors, timeouts, and rate limiting
+- Comprehensive test suite (73 tests)
 
-### Usage
-The layer includes factories for automatic fetcher creation and comprehensive content extraction with metadata processing. Supports both individual article fetching and bulk feed processing with graceful error recovery.
+### AI-Powered Processing
+**Topic Extraction Service:**
+- Identifies 3-5 key topics/themes from article content
+- Uses configurable AI providers (Gemini by default)
+- Stores topics in Article.ai_topics field for downstream processing
+- Graceful error handling with fallback to empty list
+
+**Similarity Detection & Grouping:**
+- Semantic analysis to detect similar articles from different sources
+- Connected components algorithm for efficient grouping
+- Aggregates topics from all articles in each group
+- Redis caching (24-hour TTL) to avoid redundant AI calls
+- Configurable similarity threshold (default: 0.7)
 
 ### Testing
-Comprehensive test suite with 73 passing tests covering:
-- Unit tests for simplified HTTP client with native aiohttp exception handling
-- URL validation and RSS parsing functionality
-- Integration tests for end-to-end workflows
-- Edge case testing for malformed feeds and network failures
-- Mock strategies for reliable testing without external dependencies
-- Rate limiting and retry logic validation
+Comprehensive test suite with ~149 total processor tests covering:
+- HTTP client, URL validation, and RSS parsing (73 tests)
+- Similarity detection and grouping logic (21 tests)
+- Topic extraction and content analysis (19 tests)
+- Integration workflows and edge cases
+- Mock AI providers for deterministic testing

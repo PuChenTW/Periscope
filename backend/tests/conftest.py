@@ -34,13 +34,14 @@ def database_url(pmr_postgres_config):
     return database_url.format(pmr_postgres_config)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session", autouse=True)
 def override_environment(database_url):
     original_environ = copy.deepcopy(os.environ)
 
     os.environ["DEBUG"] = "true"
     os.environ["DATABASE_URL"] = database_url
-    # os.environ["SECRET_KEY"] = "test_secret"
+    os.environ["GEMINI_API_KEY"] = "test-api-key"
+    os.environ["OPENAI_API_KEY"] = "test-api-key"
 
     yield
 
