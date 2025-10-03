@@ -12,6 +12,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.database import create_engine_and_session
 from app.main import create_app
+from app.utils.redis_client import get_redis_client
 
 postgress = create_postgres_fixture(scope="session")
 
@@ -41,6 +42,7 @@ def override_environment(database_url):
 
     os.environ["DEBUG"] = "true"
     os.environ["DATABASE_URL"] = database_url
+    os.environ["SECRET_KEY"] = "test-secret-key"
     os.environ["GEMINI_API_KEY"] = "test-api-key"
     os.environ["OPENAI_API_KEY"] = "test-api-key"
 
@@ -72,15 +74,16 @@ async def session(postgress, override_environment) -> AsyncGenerator[AsyncSessio
                 await conn.run_sync(SQLModel.metadata.drop_all)
 
 
-@pytest.fixture
-def client(session):
-    app = create_app()
-    with TestClient(app) as c:
-        yield c
-
-
 @pytest_asyncio.fixture
 async def redis_client():
     client = FakeAsyncRedis(decode_responses=True)
     yield client
     await client.close()
+
+
+@pytest.fixture
+def client(session, redis_client):
+    app = create_app()
+    app.dependency_overrides[get_redis_client] = lambda: redis_client
+    with TestClient(app) as c:
+        yield c
