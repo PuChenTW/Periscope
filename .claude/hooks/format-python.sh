@@ -29,7 +29,7 @@ if [[ "$file_path" =~ \.py$ ]]; then
 
     # 切換到 backend 目錄並執行格式化指令
     echo "Formatting Python file: $file_path"
-    (cd "$CLAUDE_PROJECT_DIR/backend" && make ruff-file FILE="$file_path")
+    (cd "$CLAUDE_PROJECT_DIR/backend" && make ruff-claude-file FILE="$file_path")
 
     # 檢查格式化是否成功
     if [[ $? -eq 0 ]]; then

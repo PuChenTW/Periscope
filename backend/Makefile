@@ -31,9 +31,9 @@ lint:  ## Run linting checks
 format:  ## Format code with ruff
 	uv run ruff format app/ tests/
 
-ruff-file: ## Format and fix a specific file with ruff (usage: make ruff-file FILE=path/to/file.py)
+ruff-claude-file: ## Format and fix a specific file with ruff (for Claude integration)
 	uv run ruff format $(FILE)
-	uv run ruff check --fix $(FILE)
+	uv run ruff check --ignore F401 --fix $(FILE)
 
 clean:  ## Clean up temporary files
 	find . -type f -name "*.pyc" -delete
