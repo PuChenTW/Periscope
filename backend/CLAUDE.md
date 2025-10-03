@@ -181,7 +181,7 @@ app/
 ├── dependencies.py            # FastAPI dependencies
 ├── exceptions.py              # Custom exception classes
 ├── middlewares.py             # Custom middleware
-├──
+│
 ├── api/                       # API layer
 │   ├── __init__.py
 │   ├── deps.py               # API dependencies
@@ -254,7 +254,8 @@ app/
 │
 └── utils/                     # Utilities and helpers
     ├── __init__.py
-    ├── cache.py              # Redis cache utilities
+    ├── cache.py              # Cache utilities
+    ├── redis_client.py       # Redis client utilities
     ├── logging.py            # Logging configuration
     ├── monitoring.py         # Metrics and monitoring
     └── validators.py         # Custom validators
@@ -263,20 +264,25 @@ app/
 ## Core Design Principles
 
 ### 1. Repository Pattern
+
 Clean separation between business logic and data access layers. Repositories handle all database operations while services contain business logic. This pattern allows for easier testing and maintains single responsibility principle.
 
 ### 2. Dependency Injection
+
 Use FastAPI's dependency injection system to manage service dependencies. Database sessions are injected through middleware, and services are composed using dependency providers. This promotes loose coupling and testability.
 
 ### 3. Session Management with Middleware
+
 Custom ORM session middleware manages database sessions per request. Sessions are automatically created, managed, and cleaned up with proper error handling and rollback support. Dirty session detection prevents uncommitted changes.
 
 ### 4. Error Handling Strategy
+
 Implement hierarchical custom exceptions for different error types (business logic, validation, external services). Use global exception handlers to provide consistent API responses and proper HTTP status codes. For HTTP client operations, leverage native aiohttp exceptions (ClientResponseError, TimeoutError, ClientError) rather than custom wrapper exceptions to maintain simplicity and standard library compatibility.
 
 ## Database Design Guidelines
 
 ### Schema Design Rules
+
 1. **Use ULIDs for primary keys** - Better for distributed systems, sortable by creation time
 2. **Include audit fields** - created_at, updated_at using mixins
 3. **Soft delete pattern** - Use deleted_at instead of hard deletes (future enhancement)
@@ -284,11 +290,13 @@ Implement hierarchical custom exceptions for different error types (business log
 5. **Constraints** - Use database constraints for data integrity
 
 ### Base Model Patterns
+
 - **ULID Mixin**: Provides string-based primary keys that are sortable and distributed-system friendly
 - **Timestamp Mixin**: Automatic created_at and updated_at fields with database-level defaults
 - **SQLModel Integration**: Combine with SQLModel for type-safe ORM with automatic API schema generation
 
 ### Key Entity Relationships
+
 - **User**: Central entity with email-based authentication, timezone awareness, and verification status
 - **DigestConfiguration**: Per-user settings for delivery time, summary style, and source management
 - **ContentSource**: User-configured RSS feeds and blog URLs with validation status
@@ -297,15 +305,18 @@ Implement hierarchical custom exceptions for different error types (business log
 ## Temporal Workflow Design Patterns
 
 ### 1. Workflow Composition
+
 Break complex workflows into smaller, reusable child workflows. Use workflow orchestration to coordinate multiple sub-workflows for configuration fetching, content processing, and email delivery. This enables better fault isolation and reusability.
 
 ### 2. Activity Design Rules
+
 - **Idempotent**: Safe to retry without side effects
 - **Deterministic**: Same input produces same output
 - **Single Responsibility**: One clear purpose per activity
 - **Timeout Aware**: Always set appropriate timeouts for different activity types
 
 ### 3. Error Handling Strategies
+
 Implement proper retry policies with exponential backoff for transient failures. Use fallback processing for partial results when some sources fail. Design workflows to gracefully degrade rather than completely fail, ensuring digest delivery even with reduced content.
 
 ## Content Processing Architecture
@@ -315,6 +326,7 @@ Implement proper retry policies with exponential backoff for transient failures.
 Complete implementation of RSS 2.0 and Atom 1.0 feed parsing with comprehensive error handling and content extraction capabilities.
 
 **Key Components:**
+
 - **Base Fetcher Interface**: Abstract class defining standard fetcher methods for validation, content fetching, and metadata extraction
 - **RSS/Atom Parser**: Full-featured parser supporting both feed formats with graceful handling of malformed content
 - **Factory Pattern**: Automatic fetcher selection based on URL scheme and content type detection
@@ -322,6 +334,7 @@ Complete implementation of RSS 2.0 and Atom 1.0 feed parsing with comprehensive 
 - **URL Validation**: Comprehensive validation utilities for feed URLs and health checking
 
 **Features:**
+
 - Support for RSS 2.0 and Atom 1.0 formats using feedparser library
 - Simplified error handling using native aiohttp exceptions (ClientResponseError, TimeoutError, ClientError)
 - Unified exception handling with consolidated retry logic for better maintainability
@@ -335,12 +348,14 @@ Complete implementation of RSS 2.0 and Atom 1.0 feed parsing with comprehensive 
 Pluggable AI model architecture enabling easy switching between different AI providers.
 
 **Key Components:**
+
 - **AIProvider Protocol**: Interface defining the `create_agent()` method for provider implementations
 - **GeminiProvider**: Implementation for Google Gemini models with PydanticAI integration
 - **OpenAIProvider**: Placeholder for future OpenAI integration
 - **Factory Function**: `create_ai_provider()` for configuration-driven provider instantiation
 
 **Features:**
+
 - Protocol-based design for extensibility
 - Configuration-driven model selection via `AI_PROVIDER` environment variable
 - Dependency injection pattern for enhanced testability
@@ -348,6 +363,7 @@ Pluggable AI model architecture enabling easy switching between different AI pro
 - All 17 similarity detector tests passing with mock provider
 
 **Implementation Details:**
+
 - Located in `app/processors/ai_provider.py`
 - Used by `SimilarityDetector` for AI-powered semantic analysis
 - Provider instances are created once and reused throughout the detection pipeline
@@ -358,6 +374,7 @@ Pluggable AI model architecture enabling easy switching between different AI pro
 AI-powered semantic analysis to detect and group similar articles from different sources using the AI provider abstraction.
 
 **Key Features:**
+
 - Uses configurable AI providers via the abstraction layer
 - Pairwise article comparison with structured AI output
 - Connected components algorithm for efficient grouping
@@ -372,6 +389,7 @@ AI-powered semantic analysis to detect and group similar articles from different
 AI-powered topic identification for article categorization and relevance scoring.
 
 **Key Features:**
+
 - Uses configurable AI providers via the abstraction layer
 - Extracts 3-5 key topics/themes from article content
 - Structured output using Pydantic models (TopicExtractionResult)
@@ -382,25 +400,28 @@ AI-powered topic identification for article categorization and relevance scoring
 - Comprehensive test suite (19 tests)
 
 ### 5. Processing Pipeline (Planned for Phase 2)
+
 Chain of responsibility pattern for content processing stages: validation, topic extraction (✅ complete), similarity detection (✅ complete), summarization, and personalization. Each processor in the pipeline transforms the content before passing to the next stage, enabling modular and testable processing.
 
 ## Configuration Management
 
 ### Environment-based Configuration
+
 Use Pydantic BaseSettings for type-safe configuration management. Key configuration categories:
+
 - **Database**: Connection URLs and pool settings
 - **Caching**: Redis connection and TTL settings
 - **Temporal**: Host, port, and namespace configuration
 - **External Services**: Email provider API keys and endpoints
 - **AI Provider Settings**:
-  - `AI_PROVIDER`: Provider selection (gemini, openai, etc.)
-  - `GEMINI_API_KEY`: Google Gemini API key
-  - `GEMINI_MODEL`: Model name (default: gemini-2.5-flash-lite)
+    - `AI_PROVIDER`: Provider selection (gemini, openai, etc.)
+    - `GEMINI_API_KEY`: Google Gemini API key
+    - `GEMINI_MODEL`: Model name (default: gemini-2.5-flash-lite)
 - **Similarity Detection**:
-  - `SIMILARITY_THRESHOLD`: Minimum confidence (default: 0.7)
-  - `SIMILARITY_CACHE_TTL_MINUTES`: Cache duration (default: 1440)
+    - `SIMILARITY_THRESHOLD`: Minimum confidence (default: 0.7)
+    - `SIMILARITY_CACHE_TTL_MINUTES`: Cache duration (default: 1440)
 - **Topic Extraction**:
-  - `TOPIC_EXTRACTION_MAX_TOPICS`: Maximum topics per article (default: 5)
+    - `TOPIC_EXTRACTION_MAX_TOPICS`: Maximum topics per article (default: 5)
 - **Security**: JWT secrets, expiration times, and encryption keys
 
 Support for .env files and environment variable overrides with proper validation and type checking.
@@ -408,9 +429,11 @@ Support for .env files and environment variable overrides with proper validation
 ## Testing Strategy
 
 ### 1. Test Structure
+
 Organize tests into layers: unit tests for individual components, integration tests for component interactions, temporal-specific tests using Temporal's test framework, and shared fixtures for test data.
 
 ### 2. Testing Guidelines
+
 - **Unit Tests**: Test individual functions/methods in isolation with mocked dependencies
 - **Integration Tests**: Test component interactions including API endpoints and database operations
 - **Workflow Tests**: Use Temporal's test framework for workflow and activity testing
@@ -423,39 +446,46 @@ Organize tests into layers: unit tests for individual components, integration te
 - **Total Processor Tests**: ~149 comprehensive tests across all content processing components
 
 ### 3. Test Configuration Approach
+
 Use pytest-mock-resources for PostgreSQL test fixtures with pgvector support. Configure separate test databases per worker for parallel test execution. Implement proper session management with automatic cleanup and rollback on test failures.
 
 ## Performance and Monitoring
 
 ### 1. Caching Strategy
+
 - **Redis Usage**: Cache user configurations, processed content (24h TTL), and API responses
 - **Cache Keys**: Structured naming convention for consistent access patterns
 - **Cache Invalidation**: Event-based invalidation triggered by configuration changes
 
 ### 2. Monitoring Points
+
 - **API Metrics**: Request count, response time, error rates across endpoints
 - **Workflow Metrics**: Execution time, failure rates, retry counts for Temporal workflows
 - **Database Metrics**: Connection pool utilization and query performance
 - **External Service Metrics**: API call success rates and response times for external dependencies
 
 ### 3. Logging Standards
+
 Use structured logging with Loguru for correlation IDs and contextual information. Configure separate handlers for console output (INFO level) and file logging (DEBUG level) with automatic rotation and retention policies. Include user IDs and operation context for request tracing.
 
 ## Security Considerations
 
 ### 1. Authentication & Authorization
+
 - JWT tokens with proper expiration
 - Email verification required before digest delivery
 - Rate limiting on API endpoints
 - Input validation on all endpoints
 
 ### 2. Data Protection
+
 - Hash sensitive data (passwords using bcrypt)
 - Encrypt configuration data if needed
 - Secure external API keys
 - HTTPS-only communications
 
 ### 3. Content Security
+
 - Validate all external URLs before fetching
 - Sanitize scraped content
 - Implement rate limiting for external requests
