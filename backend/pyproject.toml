@@ -47,4 +47,5 @@ dev = [
     "pytest-mock-resources>=2.12.4",
     "pytest-xdist>=3.8.0",
     "python-on-whales>=0.78.0",
+    "fakeredis>=2.31.3",
 ]
