@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator
 
 import pytest
 import pytest_asyncio
+from fakeredis import FakeAsyncRedis
 from fastapi.testclient import TestClient
 from pytest_mock_resources import PostgresConfig, create_postgres_fixture
 from sqlmodel import SQLModel
@@ -76,3 +77,10 @@ def client(session):
     app = create_app()
     with TestClient(app) as c:
         yield c
+
+
+@pytest_asyncio.fixture
+async def redis_client():
+    client = FakeAsyncRedis(decode_responses=True)
+    yield client
+    await client.close()

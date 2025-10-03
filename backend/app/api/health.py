@@ -2,11 +2,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from loguru import logger
+from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.basic import get_db_session
-from app.utils.cache import CacheProtocol, get_cache
+from app.utils.redis_client import get_redis_client
 
 router = APIRouter()
 
@@ -19,17 +20,16 @@ async def health_check():
 @router.get("/ready")
 async def readiness_check(
     db: Annotated[AsyncSession, Depends(get_db_session)],
-    cache: Annotated[CacheProtocol, Depends(get_cache)],
+    redis: Annotated[Redis, Depends(get_redis_client)],
 ):
     try:
         await db.exec(text("SELECT 1"))
-        await cache.set("health_check", "ok", ttl=10)
-        cache_test = await cache.get("health_check")
+        await redis.ping()
 
         return {
             "status": "ready",
             "database": "connected",
-            "cache": "connected" if cache_test == "ok" else "error",
+            "cache": "connected",
         }
 
     except Exception as e:

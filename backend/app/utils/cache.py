@@ -2,6 +2,12 @@ import threading
 import time
 from abc import ABC, abstractmethod
 
+from loguru import logger
+from redis import asyncio as aioredis
+
+from app.config import get_settings
+from app.utils.redis_client import get_redis_client
+
 
 class CacheProtocol(ABC):
     @abstractmethod
@@ -80,13 +86,96 @@ class MemoryCache(CacheProtocol):
             return True
 
 
-cache_instance: CacheProtocol = MemoryCache()
+class RedisCache(CacheProtocol):
+    """Redis-based cache implementation using injected Redis client."""
+
+    def __init__(self, redis_client: aioredis.Redis):
+        """
+        Initialize Redis cache with injected Redis client.
+
+        Args:
+            redis_client: Redis client instance (manages its own connection pool)
+        """
+        self.redis_client = redis_client
+
+    async def get(self, key: str) -> str | None:
+        """Get value from Redis cache."""
+        try:
+            return await self.redis_client.get(key)
+        except Exception as e:
+            logger.error(f"Error getting key '{key}' from Redis: {e}")
+            return None
+
+    async def set(self, key: str, value: str, ttl: int | None = None) -> bool:
+        """Set value in Redis cache with optional TTL."""
+        try:
+            if ttl is not None:
+                await self.redis_client.setex(key, ttl, value)
+            else:
+                await self.redis_client.set(key, value)
+            return True
+        except Exception as e:
+            logger.error(f"Error setting key '{key}' in Redis: {e}")
+            return False
+
+    async def setex(self, key: str, ttl: int, value: str) -> bool:
+        """Set key with value and expiration time in seconds (Redis-compatible)."""
+        try:
+            await self.redis_client.setex(key, ttl, value)
+            return True
+        except Exception as e:
+            logger.error(f"Error setting key '{key}' with TTL in Redis: {e}")
+            return False
+
+    async def delete(self, key: str) -> bool:
+        """Delete key from Redis cache."""
+        try:
+            result = await self.redis_client.delete(key)
+            return result > 0
+        except Exception as e:
+            logger.error(f"Error deleting key '{key}' from Redis: {e}")
+            return False
+
+    async def exists(self, key: str) -> bool:
+        """Check if key exists in Redis cache."""
+        try:
+            result = await self.redis_client.exists(key)
+            return result > 0
+        except Exception as e:
+            logger.error(f"Error checking existence of key '{key}' in Redis: {e}")
+            return False
+
+    async def clear(self) -> bool:
+        """Clear all keys in Redis cache."""
+        try:
+            await self.redis_client.flushdb()
+            return True
+        except Exception as e:
+            logger.error(f"Error clearing Redis cache: {e}")
+            return False
 
 
 async def get_cache() -> CacheProtocol:
-    return cache_instance
+    """
+    Get cache instance for dependency injection.
 
+    Creates RedisCache with injected Redis client if REDIS_URL is configured,
+    otherwise falls back to MemoryCache.
+    """
+    try:
+        # Create Redis client
+        redis_client = await get_redis_client()
 
-def get_redis_client() -> CacheProtocol:
-    """Get cache client (Redis-compatible interface)."""
-    return cache_instance
+        # Test connection
+        await redis_client.exists("__connection_test__")
+
+        # Create cache with injected client
+        redis_cache = RedisCache(redis_client=redis_client)
+
+        logger.debug("Redis cache created")
+        return redis_cache
+
+    except Exception as e:
+        logger.warning(f"Failed to create Redis cache: {e}. Falling back to MemoryCache.")
+        settings = get_settings()
+        return MemoryCache(default_ttl=settings.cache_ttl_minutes * 60)

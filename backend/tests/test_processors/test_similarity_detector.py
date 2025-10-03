@@ -33,11 +33,9 @@ class TestSimilarityDetector:
     @pytest.fixture
     def similarity_detector(self, mock_ai_provider):
         """Create SimilarityDetector instance for testing."""
-        with patch("app.processors.similarity_detector.get_redis_client") as mock_redis:
-            mock_redis.return_value = AsyncMock()
-            detector = SimilarityDetector(ai_provider=mock_ai_provider)
-            detector.redis_client = mock_redis.return_value
-            return detector
+        mock_cache = AsyncMock()
+        detector = SimilarityDetector(cache=mock_cache, ai_provider=mock_ai_provider)
+        return detector
 
     @pytest.fixture
     def sample_articles(self):
@@ -102,7 +100,7 @@ class TestSimilarityDetector:
 
         with similarity_detector.agent.override(model=test_model):
             # Mock cache to return None (no cached result)
-            similarity_detector.redis_client.get.return_value = None
+            similarity_detector.cache.get.return_value = None
 
             is_similar = await similarity_detector._compare_articles(sample_articles[0], sample_articles[1])
 
@@ -120,7 +118,7 @@ class TestSimilarityDetector:
         )
 
         with similarity_detector.agent.override(model=test_model):
-            similarity_detector.redis_client.get.return_value = None
+            similarity_detector.cache.get.return_value = None
 
             is_similar = await similarity_detector._compare_articles(sample_articles[0], sample_articles[2])
 
@@ -138,7 +136,7 @@ class TestSimilarityDetector:
         )
 
         with similarity_detector.agent.override(model=test_model):
-            similarity_detector.redis_client.get.return_value = None
+            similarity_detector.cache.get.return_value = None
 
             is_similar = await similarity_detector._compare_articles(sample_articles[0], sample_articles[1])
 
@@ -222,7 +220,7 @@ class TestSimilarityDetector:
 
         # Mock cached result
         cached_data = json.dumps({"is_similar": True})
-        similarity_detector.redis_client.get.return_value = cached_data
+        similarity_detector.cache.get.return_value = cached_data
 
         is_similar = await similarity_detector._compare_articles(sample_articles[0], sample_articles[1])
 
@@ -230,13 +228,13 @@ class TestSimilarityDetector:
         assert is_similar is True
 
         # Agent should not be called (no AI request made)
-        similarity_detector.redis_client.get.assert_called_once()
+        similarity_detector.cache.get.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_cache_miss_stores_result(self, similarity_detector, sample_articles):
         """Test that comparison results are cached."""
         # Mock cache miss
-        similarity_detector.redis_client.get.return_value = None
+        similarity_detector.cache.get.return_value = None
 
         # Override agent with TestModel
         test_model = TestModel(custom_output_args=SimilarityScore(confidence=0.9, reasoning="Similar articles"))
@@ -245,12 +243,12 @@ class TestSimilarityDetector:
             await similarity_detector._compare_articles(sample_articles[0], sample_articles[1])
 
             # Verify cache was written to
-            similarity_detector.redis_client.setex.assert_called_once()
+            similarity_detector.cache.setex.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_error_handling_in_comparison(self, similarity_detector, sample_articles):
         """Test that errors during comparison are handled gracefully."""
-        similarity_detector.redis_client.get.return_value = None
+        similarity_detector.cache.get.return_value = None
 
         # Make agent raise an exception
         with patch.object(similarity_detector.agent, "run", side_effect=Exception("AI service error")):

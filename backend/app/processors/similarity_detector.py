@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from app.config import Settings, get_settings
 from app.processors.ai_provider import AIProvider, create_ai_provider
 from app.processors.fetchers.base import Article
-from app.utils.cache import get_redis_client
+from app.utils.cache import CacheProtocol
 
 
 class SimilarityScore(BaseModel):
@@ -62,16 +62,22 @@ class SimilarityDetector:
     The AI provider is configurable through application settings.
     """
 
-    def __init__(self, settings: Settings | None = None, ai_provider: AIProvider | None = None):
+    def __init__(
+        self,
+        cache: CacheProtocol,
+        settings: Settings | None = None,
+        ai_provider: AIProvider | None = None,
+    ):
         """
         Initialize the similarity detector with PydanticAI agent.
 
         Args:
+            cache: Cache instance for storing similarity results
             settings: Application settings (uses get_settings() if not provided)
             ai_provider: AI provider instance (creates from settings if not provided)
         """
         self.settings = settings or get_settings()
-        self.redis_client = get_redis_client()
+        self.cache = cache
 
         # Create AI provider if not injected
         provider = ai_provider or create_ai_provider(self.settings)
@@ -282,7 +288,7 @@ class SimilarityDetector:
     async def _get_cached_similarity(self, cache_key: str) -> bool | None:
         """Retrieve cached similarity result."""
         try:
-            cached = await self.redis_client.get(cache_key)
+            cached = await self.cache.get(cache_key)
             if cached:
                 data = json.loads(cached)
                 return data["is_similar"]
@@ -295,7 +301,7 @@ class SimilarityDetector:
         try:
             ttl_seconds = self.settings.similarity_cache_ttl_minutes * 60
             data = {"is_similar": is_similar}
-            await self.redis_client.setex(cache_key, ttl_seconds, json.dumps(data))
+            await self.cache.setex(cache_key, ttl_seconds, json.dumps(data))
         except Exception as e:
             logger.warning(f"Error caching similarity result: {e}")
 
@@ -305,12 +311,19 @@ if __name__ == "__main__":
 
     from pydantic import HttpUrl
 
+    from app.utils.cache import RedisCache
+    from app.utils.redis_client import get_redis_client
+
     async def main():
         # Create test articles
         article1 = Article(
             url=HttpUrl("https://example.com/article1"),
             title="OpenAI Releases GPT-5 with Major Performance Improvements",
-            content="OpenAI announced today the release of GPT-5, their latest language model. The new model shows significant improvements in reasoning and accuracy compared to GPT-4. The company claims 40% better performance on complex tasks.",
+            content=(
+                "OpenAI announced today the release of GPT-5, their latest language model. "
+                "The new model shows significant improvements in reasoning and accuracy compared to GPT-4. "
+                "The company claims 40% better performance on complex tasks."
+            ),
             tags=["AI", "technology"],
             ai_topics=["artificial intelligence", "machine learning"],
             fetched_at=datetime.now(),
@@ -319,7 +332,11 @@ if __name__ == "__main__":
         article2 = Article(
             url=HttpUrl("https://example.com/article2"),
             title="GPT-5 Launch: OpenAI's Newest AI Model Shows Dramatic Gains",
-            content="In a major announcement, OpenAI has unveiled GPT-5. The advanced language model demonstrates remarkable improvements in task completion and reasoning abilities over its predecessor GPT-4.",
+            content=(
+                "In a major announcement, OpenAI has unveiled GPT-5. "
+                "The advanced language model demonstrates remarkable improvements in task completion "
+                "and reasoning abilities over its predecessor GPT-4."
+            ),
             tags=["AI", "tech news"],
             ai_topics=["artificial intelligence", "language models"],
             fetched_at=datetime.now(),
@@ -328,14 +345,19 @@ if __name__ == "__main__":
         article3 = Article(
             url=HttpUrl("https://example.com/article3"),
             title="New Python 3.13 Released with Performance Enhancements",
-            content="The Python Software Foundation released Python 3.13 today. The new version includes significant performance improvements and new syntax features for developers.",
+            content=(
+                "The Python Software Foundation released Python 3.13 today. "
+                "The new version includes significant performance improvements and new syntax features for developers."
+            ),
             tags=["Python", "programming"],
             ai_topics=["programming languages", "software development"],
             fetched_at=datetime.now(),
         )
 
-        # Initialize detector
-        detector = SimilarityDetector()
+        # Initialize detector with cache
+        redis = await get_redis_client()
+        cache = RedisCache(redis_client=redis)
+        detector = SimilarityDetector(cache=cache)
 
         # Test similarity detection
         print("\n=== Testing Similarity Detection ===\n")

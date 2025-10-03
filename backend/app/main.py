@@ -8,12 +8,15 @@ from loguru import logger
 from app.api import auth, digest, health, users
 from app.config import get_settings
 from app.middlewares import ORMSessionMiddleware
+from app.utils.redis_client import get_redis_client
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ARG001
     logger.info("Starting Personal Daily Reading Digest Backend")
     yield
+    redis = get_redis_client()
+    await redis.aclose()
     logger.info("Shutting down Personal Daily Reading Digest Backend")
 
 

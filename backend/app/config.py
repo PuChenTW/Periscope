@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     smtp_password: str = Field("", env="SMTP_PASSWORD")
 
     cache_ttl_minutes: int = Field(60, env="CACHE_TTL_MINUTES")
+    redis_url: str = Field("redis://localhost:6379/0", env="REDIS_URL")
+    redis_max_connections: int = Field(10, env="REDIS_MAX_CONNECTIONS")
 
     # RSS Fetcher Settings
     rss_fetch_timeout: int = Field(30, env="RSS_FETCH_TIMEOUT")
