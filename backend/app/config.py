@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # Topic Extraction Settings
     topic_extraction_max_topics: int = Field(5, env="TOPIC_EXTRACTION_MAX_TOPICS")
 
+    # Content Normalization Settings
+    content_min_length: int = Field(100, env="CONTENT_MIN_LENGTH")
+    spam_detection_enabled: bool = Field(True, env="SPAM_DETECTION_ENABLED")
+
 
 @cache
 def get_settings() -> Settings:
