@@ -55,9 +55,7 @@ async def get_user_profile(current_user: Annotated[dict, Depends(get_current_use
 
 
 @router.put("/me")
-async def update_user_profile(
-    timezone: str, current_user: Annotated[dict, Depends(get_current_user)]
-):
+async def update_user_profile(timezone: str, current_user: Annotated[dict, Depends(get_current_user)]):
     return {
         "message": "Profile updated successfully (mock)",
         "user": {**current_user, "timezone": timezone},
