@@ -78,7 +78,7 @@ async def session(postgress, override_environment) -> AsyncGenerator[AsyncSessio
 async def redis_client():
     client = FakeAsyncRedis(decode_responses=True)
     yield client
-    await client.close()
+    await client.aclose()
 
 
 @pytest.fixture

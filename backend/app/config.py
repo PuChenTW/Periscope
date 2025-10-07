@@ -50,7 +50,13 @@ class Settings(BaseSettings):
 
     # Content Normalization Settings
     content_min_length: int = Field(100, env="CONTENT_MIN_LENGTH")
+    content_max_length: int = Field(50000, env="CONTENT_MAX_LENGTH")
     spam_detection_enabled: bool = Field(True, env="SPAM_DETECTION_ENABLED")
+    title_max_length: int = Field(500, env="TITLE_MAX_LENGTH")
+    author_max_length: int = Field(100, env="AUTHOR_MAX_LENGTH")
+    tag_max_length: int = Field(50, env="TAG_MAX_LENGTH")
+    max_tags_per_article: int = Field(20, env="MAX_TAGS_PER_ARTICLE")
+    quality_scoring_enabled: bool = Field(True, env="QUALITY_SCORING_ENABLED")
 
 
 @cache

@@ -6,6 +6,7 @@ fetcher provides, ensuring consistent data quality before AI processing.
 """
 
 import textwrap
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -23,6 +24,15 @@ class SpamDetectionResult(BaseModel):
     reasoning: str = Field(description="Explanation of the spam determination")
 
 
+class ContentQualityResult(BaseModel):
+    """AI-powered content quality assessment result."""
+
+    writing_quality: int = Field(description="Writing quality and coherence score (0-20)", ge=0, le=20)
+    informativeness: int = Field(description="Informativeness and depth score (0-20)", ge=0, le=20)
+    credibility: int = Field(description="Credibility and sourcing score (0-10)", ge=0, le=10)
+    reasoning: str = Field(description="Explanation of the quality assessment")
+
+
 class ContentNormalizer:
     """
     Normalizes article content and metadata for consistent processing.
@@ -35,7 +45,13 @@ class ContentNormalizer:
     def __init__(
         self,
         content_min_length: int = 100,
+        content_max_length: int = 50000,
         spam_detection_enabled: bool = True,
+        title_max_length: int = 500,
+        author_max_length: int = 100,
+        tag_max_length: int = 50,
+        max_tags_per_article: int = 20,
+        quality_scoring_enabled: bool = True,
         ai_provider: AIProvider | None = None,
     ):
         """
@@ -43,18 +59,30 @@ class ContentNormalizer:
 
         Args:
             content_min_length: Minimum content length in characters (default: 100)
+            content_max_length: Maximum content length in characters (default: 50000)
             spam_detection_enabled: Enable AI-powered spam detection (default: True)
+            title_max_length: Maximum title length in characters (default: 500)
+            author_max_length: Maximum author name length (default: 100)
+            tag_max_length: Maximum tag length (default: 50)
+            max_tags_per_article: Maximum tags per article (default: 20)
+            quality_scoring_enabled: Enable AI-powered quality assessment (default: True)
             ai_provider: AI provider instance (creates default if not provided)
         """
         self.content_min_length = content_min_length
+        self.content_max_length = content_max_length
         self.spam_detection_enabled = spam_detection_enabled
+        self.title_max_length = title_max_length
+        self.author_max_length = author_max_length
+        self.tag_max_length = tag_max_length
+        self.max_tags_per_article = max_tags_per_article
+        self.quality_scoring_enabled = quality_scoring_enabled
 
         # Create AI provider if not injected
         settings = get_settings()
         provider = ai_provider or create_ai_provider(settings)
 
         # Initialize PydanticAI agent for spam detection
-        self.agent = provider.create_agent(
+        self.spam_agent = provider.create_agent(
             output_type=SpamDetectionResult,
             system_prompt=textwrap.dedent("""\
                 You are an expert at detecting spam and low-quality content.
@@ -79,6 +107,35 @@ class ContentNormalizer:
             """),
         )
 
+        # Initialize PydanticAI agent for quality assessment
+        self.quality_agent = provider.create_agent(
+            output_type=ContentQualityResult,
+            system_prompt=textwrap.dedent("""\
+                You are an expert at assessing content quality.
+                Your task is to evaluate article quality across three dimensions:
+
+                1. Writing Quality (0-20 points):
+                   - Clear and coherent writing style
+                   - Proper grammar and structure
+                   - Logical flow and organization
+                   - Readability and engagement
+
+                2. Informativeness (0-20 points):
+                   - Depth of information provided
+                   - Coverage of the topic
+                   - Value and usefulness to readers
+                   - Specific details and insights
+
+                3. Credibility (0-10 points):
+                   - Evidence of research or sources
+                   - Balanced perspective
+                   - Professional tone
+                   - Trustworthiness indicators
+
+                Provide scores for each dimension and clear reasoning for your assessment.
+            """),
+        )
+
     async def normalize(self, article: Article) -> Article | None:
         """
         Normalize an article's content and metadata.
@@ -89,12 +146,21 @@ class ContentNormalizer:
         Returns:
             Normalized article, or None if article should be rejected
         """
-        # Content validation - reject low-quality articles
+        # Phase 1: Content validation - reject low-quality articles
         if not await self._validate_content(article):
             logger.debug(f"Article '{article.title[:50]}...' rejected during content validation")
             return None
 
-        # If validation passes, return the article unchanged (for now)
+        # Phase 2: Metadata standardization
+        article = self._normalize_title(article)
+        article = self._normalize_author(article)
+        article = self._normalize_tags(article)
+        article = self._normalize_url(article)
+        article = self._enforce_content_length(article)
+
+        # Phase 3: Hybrid quality scoring
+        article = await self._calculate_quality_score(article)
+
         return article
 
     async def _validate_content(self, article: Article) -> bool:
@@ -160,7 +226,7 @@ class ContentNormalizer:
 
         try:
             # Run AI spam detection
-            result = await self.agent.run(prompt)
+            result = await self.spam_agent.run(prompt)
             detection_result = result.output
 
             logger.debug(
@@ -176,6 +242,284 @@ class ContentNormalizer:
             logger.error(f"Error during AI spam detection for article '{article.title[:50]}...': {e}")
             # On error, return False (not spam) to avoid false rejections
             return False
+
+    def _normalize_title(self, article: Article) -> Article:
+        """
+        Normalize article title: cleanup whitespace, enforce max length, fallback.
+
+        Args:
+            article: Article to normalize
+
+        Returns:
+            Article with normalized title
+        """
+        if not article.title or not article.title.strip():
+            article.title = "Untitled Article"
+            logger.debug("Article has empty title, using fallback")
+            return article
+
+        # Clean up whitespace
+        title = " ".join(article.title.split())
+
+        # Enforce max length with smart truncation
+        if len(title) > self.title_max_length:
+            title = title[: self.title_max_length].rsplit(" ", 1)[0] + "..."
+            logger.debug(f"Title truncated to {self.title_max_length} chars")
+
+        article.title = title
+        return article
+
+    def _normalize_author(self, article: Article) -> Article:
+        """
+        Normalize author name: title case, cleanup whitespace, enforce max length.
+
+        Args:
+            article: Article to normalize
+
+        Returns:
+            Article with normalized author
+        """
+        if not article.author or not article.author.strip():
+            return article
+
+        # Clean up whitespace and apply title case
+        author = " ".join(article.author.split())
+        author = author.title()
+
+        # Enforce max length with truncation
+        if len(author) > self.author_max_length:
+            author = author[: self.author_max_length].rsplit(" ", 1)[0] + "..."
+            logger.debug(f"Author name truncated to {self.author_max_length} chars")
+
+        article.author = author
+        return article
+
+    def _normalize_tags(self, article: Article) -> Article:
+        """
+        Normalize tags: lowercase, deduplicate, enforce limits.
+
+        Args:
+            article: Article to normalize
+
+        Returns:
+            Article with normalized tags
+        """
+        if not article.tags:
+            return article
+
+        # Normalize and deduplicate tags
+        normalized_tags = []
+        seen = set()
+
+        for tag in article.tags:
+            # Clean up and lowercase
+            tag = tag.strip().lower()
+
+            # Skip empty tags
+            if not tag:
+                continue
+
+            # Enforce tag length limit
+            if len(tag) > self.tag_max_length:
+                tag = tag[: self.tag_max_length]
+
+            # Deduplicate
+            if tag not in seen:
+                normalized_tags.append(tag)
+                seen.add(tag)
+
+            # Stop at max tags
+            if len(normalized_tags) >= self.max_tags_per_article:
+                break
+
+        article.tags = normalized_tags
+        return article
+
+    def _normalize_url(self, article: Article) -> Article:
+        """
+        Normalize article URL: remove tracking params, ensure https.
+
+        Args:
+            article: Article to normalize
+
+        Returns:
+            Article with normalized URL
+        """
+        url_str = str(article.url)
+
+        # Remove common tracking parameters
+        tracking_params = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "ref", "campaign"]
+
+        # Parse URL and rebuild without tracking params
+
+        parsed = urlparse(url_str)
+
+        # Filter out tracking params
+        if parsed.query:
+            query_params = parse_qs(parsed.query)
+            filtered_params = {k: v for k, v in query_params.items() if k not in tracking_params}
+
+            # Rebuild query string
+            new_query = urlencode(filtered_params, doseq=True) if filtered_params else ""
+
+            # Rebuild URL
+            url_str = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+
+        # Ensure https (upgrade http to https)
+        if url_str.startswith("http://"):
+            url_str = "https://" + url_str[7:]
+
+        article.url = url_str  # type: ignore
+        return article
+
+    def _enforce_content_length(self, article: Article) -> Article:
+        """
+        Enforce maximum content length with smart truncation.
+
+        Args:
+            article: Article to normalize
+
+        Returns:
+            Article with content truncated if needed
+        """
+        if not article.content or len(article.content) <= self.content_max_length:
+            return article
+
+        # Capture original length before truncation
+        original_length = len(article.content)
+
+        # Truncate at word boundary
+        truncated = article.content[: self.content_max_length]
+        truncated = truncated.rsplit(" ", 1)[0]
+
+        article.content = truncated
+        logger.debug(f"Content truncated from {original_length} to {len(truncated)} chars")
+
+        return article
+
+    def _calculate_metadata_score(self, article: Article) -> int:
+        """
+        Calculate rule-based metadata completeness score (0-50 points).
+
+        Scoring:
+        - Has author: +10
+        - Has published_at: +10
+        - Has tags (1+): +5
+        - Content > 500 chars: +15
+        - Content > 1000 chars: +10 bonus
+
+        Args:
+            article: Article to score
+
+        Returns:
+            Metadata score (0-50)
+        """
+        score = 0
+
+        # Author presence
+        if article.author and article.author.strip():
+            score += 10
+
+        # Published date presence
+        if article.published_at:
+            score += 10
+
+        # Tags presence
+        if article.tags and len(article.tags) > 0:
+            score += 5
+
+        # Content length scoring
+        content_length = len(article.content) if article.content else 0
+        if content_length > 500:
+            score += 15
+            if content_length > 1000:
+                score += 10  # Bonus for longer content
+
+        return score
+
+    async def _assess_content_quality(self, article: Article) -> ContentQualityResult:
+        """
+        Assess content quality using AI (0-50 points).
+
+        Args:
+            article: Article to assess
+
+        Returns:
+            ContentQualityResult with scores for writing, informativeness, credibility
+        """
+        # Truncate content to avoid token limits (use first 1500 chars for quality assessment)
+        content = article.content[:1500] if article.content else ""
+
+        # Build prompt for AI quality assessment
+        prompt = textwrap.dedent(f"""\
+            Article Title: {article.title}
+            Content: {content}
+
+            Assess the quality of this article content across three dimensions:
+            1. Writing Quality (0-20): Clarity, coherence, grammar, structure
+            2. Informativeness (0-20): Depth, coverage, value, insights
+            3. Credibility (0-10): Evidence, balance, professionalism
+        """)
+
+        try:
+            # Run AI quality assessment
+            result = await self.quality_agent.run(prompt)
+            quality_result = result.output
+
+            logger.debug(
+                f"Quality assessment for '{article.title[:50]}...': "
+                f"writing={quality_result.writing_quality}, "
+                f"info={quality_result.informativeness}, "
+                f"credibility={quality_result.credibility}"
+            )
+
+            return quality_result
+
+        except Exception as e:
+            logger.error(f"Error during AI quality assessment for article '{article.title[:50]}...': {e}")
+            # On error, return neutral scores
+            return ContentQualityResult(
+                writing_quality=10,
+                informativeness=10,
+                credibility=5,
+                reasoning="Error during assessment, using neutral scores",
+            )
+
+    async def _calculate_quality_score(self, article: Article) -> Article:
+        """
+        Calculate hybrid quality score combining rule-based and AI assessment.
+
+        Args:
+            article: Article to score
+
+        Returns:
+            Article with quality_score in metadata
+        """
+        # Calculate rule-based metadata score (0-50)
+        metadata_score = self._calculate_metadata_score(article)
+
+        # Calculate AI-powered content quality score (0-50) and combine
+        ai_content_score = 0
+        if self.quality_scoring_enabled:
+            quality_result = await self._assess_content_quality(article)
+            ai_content_score = (
+                quality_result.writing_quality + quality_result.informativeness + quality_result.credibility
+            )
+            quality_score = metadata_score + ai_content_score
+        else:
+            # When AI scoring is disabled, scale metadata score to 0-100
+            quality_score = metadata_score * 2
+
+        # Store in metadata
+        article.metadata["quality_score"] = quality_score
+        article.metadata["quality_breakdown"] = {"metadata_score": metadata_score, "ai_content_score": ai_content_score}
+
+        logger.debug(
+            f"Quality score for '{article.title[:50]}...': "
+            f"total={quality_score}, metadata={metadata_score}, ai={ai_content_score}"
+        )
+
+        return article
 
 
 if __name__ == "__main__":
