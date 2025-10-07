@@ -22,7 +22,7 @@ restart:  ## Restart all services
 	docker compose restart
 
 test:  ## Run pytest test suite
-	uv run pytest tests/ -v
+	uv run pytest tests/ -v -n auto
 
 lint:  ## Run linting checks
 	uv run ruff check app/ tests/
