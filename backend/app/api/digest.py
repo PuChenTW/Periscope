@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -41,28 +41,28 @@ async def get_digest_preview(current_user: Annotated[dict, Depends(get_current_u
             "summary": "Researchers have developed a new approach to training language models that reduces computational requirements by 40% while maintaining performance.",
             "source_name": "Tech News Daily",
             "url": "https://example.com/ai-breakthrough",
-            "published_at": datetime.now(),
+            "published_at": datetime.now(UTC),
         },
         {
             "title": "Startup Funding Trends in 2024",
             "summary": "Venture capital investment patterns show a shift towards sustainable technology and healthcare startups this year.",
             "source_name": "Startup Weekly",
             "url": "https://example.com/funding-trends",
-            "published_at": datetime.now(),
+            "published_at": datetime.now(UTC),
         },
         {
             "title": "Remote Work Best Practices",
             "summary": "New study reveals the most effective strategies for maintaining productivity and team collaboration in distributed teams.",
             "source_name": "Work & Life",
             "url": "https://example.com/remote-work",
-            "published_at": datetime.now(),
+            "published_at": datetime.now(UTC),
         },
     ]
 
     return {
         "articles": mock_articles,
         "total_count": len(mock_articles),
-        "generated_at": datetime.now(),
+        "generated_at": datetime.now(UTC),
     }
 
 
@@ -86,14 +86,14 @@ async def get_delivery_history(
             "status": "delivered",
             "article_count": 5,
             "error_message": None,
-            "created_at": datetime.now(),
+            "created_at": datetime.now(UTC),
         },
         {
             "id": "delivery_2",
             "status": "failed",
             "article_count": None,
             "error_message": "Source timeout",
-            "created_at": datetime.now(),
+            "created_at": datetime.now(UTC),
         },
     ]
 

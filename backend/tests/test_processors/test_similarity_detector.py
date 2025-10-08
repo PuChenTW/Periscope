@@ -3,7 +3,7 @@ Tests for SimilarityDetector implementation using PydanticAI
 """
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -40,6 +40,7 @@ class TestSimilarityDetector:
     @pytest.fixture
     def sample_articles(self):
         """Create sample articles for testing."""
+        fetch_time = datetime.now(UTC)
         return [
             Article(
                 title="OpenAI Launches GPT-5 with Revolutionary Features",
@@ -49,6 +50,7 @@ class TestSimilarityDetector:
                     "groundbreaking capabilities..."
                 ),
                 published_at=datetime(2024, 1, 15, 10, 0),
+                fetch_timestamp=fetch_time,
                 tags=["AI", "OpenAI", "GPT"],
             ),
             Article(
@@ -59,6 +61,7 @@ class TestSimilarityDetector:
                     "including better reasoning..."
                 ),
                 published_at=datetime(2024, 1, 15, 11, 0),
+                fetch_timestamp=fetch_time,
                 tags=["technology", "artificial intelligence"],
             ),
             Article(
@@ -68,6 +71,7 @@ class TestSimilarityDetector:
                     "Astronomers have identified a new exoplanet orbiting a star 500 light-years away from Earth..."
                 ),
                 published_at=datetime(2024, 1, 15, 9, 0),
+                fetch_timestamp=fetch_time,
                 tags=["space", "astronomy"],
             ),
         ]
@@ -348,6 +352,7 @@ class TestSimilarityDetector:
             url=HttpUrl("https://techblog.com/gpt5-technical"),
             content="A technical analysis of the new GPT-5 architecture and its improvements...",
             published_at=datetime(2024, 1, 15, 12, 0),
+            fetch_timestamp=datetime.now(UTC),
             tags=["AI", "technology"],
             ai_topics=["GPT-5", "Neural Networks", "Technology"],
         )

@@ -2,7 +2,7 @@
 Tests for ContentNormalizer implementation
 """
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -60,6 +60,7 @@ class TestContentNormalizer:
                 "intelligence technology. This represents a major milestone in AI development."
             ),
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=datetime.now(UTC),
             author="John Doe",
             tags=["AI", "OpenAI", "GPT"],
         )
@@ -81,6 +82,7 @@ class TestContentNormalizer:
             url=HttpUrl("https://example.com/empty"),
             content="",
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -94,6 +96,7 @@ class TestContentNormalizer:
             url=HttpUrl("https://example.com/whitespace"),
             content="   \n\t  \n   ",
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -107,6 +110,7 @@ class TestContentNormalizer:
             url=HttpUrl("https://example.com/short"),
             content="Short.",  # Only 6 characters, below 50 char minimum
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -123,6 +127,7 @@ class TestContentNormalizer:
             url=HttpUrl("https://example.com/min"),
             content=content,
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -144,6 +149,7 @@ class TestContentNormalizer:
             url=HttpUrl("https://example.com/unicode"),
             content=content,
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -164,6 +170,7 @@ class TestContentNormalizer:
             url=HttpUrl("https://example.com/emoji"),
             content=content,
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -181,6 +188,7 @@ class TestContentNormalizer:
             url=HttpUrl("https://example.com/spam"),
             content=spam_content,
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=datetime.now(UTC),
         )
 
         # Mock AI to return spam
@@ -206,6 +214,7 @@ class TestContentNormalizer:
             url=HttpUrl("https://example.com/spam"),
             content=spam_content,
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer_no_spam.normalize(article)
@@ -215,6 +224,7 @@ class TestContentNormalizer:
     @pytest.mark.asyncio
     async def test_normalize_article_with_minimal_metadata(self, normalizer):
         """Test normalization of article with only required fields."""
+        fetch_timestamp = datetime.now(UTC)
         article = Article(
             title="Minimal Article",
             url=HttpUrl("https://example.com/minimal"),
@@ -222,6 +232,7 @@ class TestContentNormalizer:
                 "This is a minimal article with just enough content to pass validation. "
                 "It has realistic text to avoid spam detection patterns during testing."
             ),
+            fetch_timestamp=fetch_timestamp,
         )
 
         result = await normalizer.normalize(article)
@@ -229,7 +240,8 @@ class TestContentNormalizer:
         assert result is not None
         assert result.title == "Minimal Article"
         assert result.author is None
-        assert result.published_at is None
+        # After normalization, published_at should never be None - it falls back to fetch_timestamp
+        assert result.published_at == fetch_timestamp
         assert result.tags == []
 
     @pytest.mark.asyncio
@@ -259,6 +271,7 @@ class TestContentNormalizer:
             title="  Multiple   spaces   and\n  newlines  ",
             url=HttpUrl("https://example.com/test"),
             content="Valid content with enough length to pass validation checks.",
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -278,6 +291,7 @@ class TestContentNormalizer:
             title=long_title,
             url=HttpUrl("https://example.com/test"),
             content="Valid content with enough length to pass validation checks.",
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -295,6 +309,7 @@ class TestContentNormalizer:
             title="   ",  # Whitespace-only
             url=HttpUrl("https://example.com/test"),
             content="Valid content with enough length to pass validation checks.",
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -311,6 +326,7 @@ class TestContentNormalizer:
             url=HttpUrl("https://example.com/test"),
             content="Valid content with enough length to pass validation checks.",
             author="  john   doe  ",
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -331,6 +347,7 @@ class TestContentNormalizer:
             url=HttpUrl("https://example.com/test"),
             content="Valid content with enough length to pass validation checks.",
             author=long_author,
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -348,6 +365,7 @@ class TestContentNormalizer:
             url=HttpUrl("https://example.com/test"),
             content="Valid content with enough length to pass validation checks.",
             tags=["AI", "Machine Learning", "ai", "ML", "machine learning", "AI"],
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -373,6 +391,7 @@ class TestContentNormalizer:
             url=HttpUrl("https://example.com/test"),
             content="Valid content with enough length to pass validation checks.",
             tags=tags,
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -393,6 +412,7 @@ class TestContentNormalizer:
             url=HttpUrl("https://example.com/test"),
             content="Valid content with enough length to pass validation checks.",
             tags=[long_tag, "short"],
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -409,6 +429,7 @@ class TestContentNormalizer:
             title="Test Article",
             url=HttpUrl("https://example.com/article?utm_source=rss&utm_campaign=feed&ref=twitter&id=123"),
             content="Valid content with enough length to pass validation checks.",
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -428,6 +449,7 @@ class TestContentNormalizer:
             title="Test Article",
             url=HttpUrl("http://example.com/article"),
             content="Valid content with enough length to pass validation checks.",
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -447,6 +469,7 @@ class TestContentNormalizer:
             title="Test Article",
             url=HttpUrl("https://example.com/test"),
             content=long_content,
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await normalizer.normalize(article)
@@ -455,3 +478,124 @@ class TestContentNormalizer:
         assert len(result.content) <= 200
         # Should end at word boundary
         assert not result.content.endswith(" ")
+
+    # ========== Date Normalization Tests ==========
+
+    @pytest.mark.asyncio
+    async def test_normalize_date_missing_published_at(self, normalizer):
+        """Test that missing published_at falls back to fetch_timestamp."""
+        fetch_timestamp = datetime.now(UTC)
+        article = Article(
+            title="Article Without Date",
+            url=HttpUrl("https://example.com/no-date"),
+            content="Valid content with enough length to pass validation checks for testing.",
+            published_at=None,  # No published date
+            fetch_timestamp=fetch_timestamp,
+        )
+
+        result = await normalizer.normalize(article)
+
+        assert result is not None
+        assert result.published_at == fetch_timestamp
+        assert result.published_at.tzinfo == UTC
+
+    @pytest.mark.asyncio
+    async def test_normalize_date_naive_datetime(self, normalizer):
+        """Test that naive datetime is converted to UTC-aware."""
+        naive_date = datetime(2024, 1, 15, 10, 30, 0)  # Naive (no timezone)
+
+        article = Article(
+            title="Article With Naive Date",
+            url=HttpUrl("https://example.com/naive-date"),
+            content="Valid content with enough length to pass validation checks for testing.",
+            published_at=naive_date,
+            fetch_timestamp=datetime.now(UTC),
+        )
+
+        result = await normalizer.normalize(article)
+
+        assert result is not None
+        assert result.published_at is not None
+        assert result.published_at.tzinfo == UTC
+        # Should preserve the date/time values, just add UTC timezone
+        assert result.published_at.year == 2024
+        assert result.published_at.month == 1
+        assert result.published_at.day == 15
+        assert result.published_at.hour == 10
+        assert result.published_at.minute == 30
+
+    @pytest.mark.asyncio
+    async def test_normalize_date_non_utc_timezone(self, normalizer):
+        """Test that non-UTC aware datetime is converted to UTC."""
+        # Create a datetime in Eastern Time (UTC-5)
+        eastern_date = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone(timedelta(hours=-5)))
+
+        article = Article(
+            title="Article With Eastern Time",
+            url=HttpUrl("https://example.com/eastern-date"),
+            content="Valid content with enough length to pass validation checks for testing.",
+            published_at=eastern_date,
+            fetch_timestamp=datetime.now(UTC),
+        )
+
+        result = await normalizer.normalize(article)
+
+        assert result is not None
+        assert result.published_at is not None
+        assert result.published_at.tzinfo == UTC
+        # Time should be converted: 10:30 EST = 15:30 UTC
+        assert result.published_at.hour == 15
+        assert result.published_at.minute == 30
+
+    @pytest.mark.asyncio
+    async def test_normalize_date_already_utc(self, normalizer):
+        """Test that UTC-aware datetime is preserved unchanged."""
+        utc_date = datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC)
+
+        article = Article(
+            title="Article With UTC Date",
+            url=HttpUrl("https://example.com/utc-date"),
+            content="Valid content with enough length to pass validation checks for testing.",
+            published_at=utc_date,
+            fetch_timestamp=datetime.now(UTC),
+        )
+
+        result = await normalizer.normalize(article)
+
+        assert result is not None
+        assert result.published_at == utc_date
+        assert result.published_at.tzinfo == UTC
+
+    @pytest.mark.asyncio
+    async def test_normalize_date_never_none(self, normalizer):
+        """Test that published_at is never None after normalization."""
+        # Test with various date scenarios
+        test_articles = [
+            Article(
+                title="No Date",
+                url=HttpUrl("https://example.com/1"),
+                content="Valid content with enough length to pass validation checks for testing.",
+                published_at=None,
+                fetch_timestamp=datetime.now(UTC),
+            ),
+            Article(
+                title="Naive Date",
+                url=HttpUrl("https://example.com/2"),
+                content="Valid content with enough length to pass validation checks for testing.",
+                published_at=datetime(2024, 1, 15, 10, 0),
+                fetch_timestamp=datetime.now(UTC),
+            ),
+            Article(
+                title="UTC Date",
+                url=HttpUrl("https://example.com/3"),
+                content="Valid content with enough length to pass validation checks for testing.",
+                published_at=datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                fetch_timestamp=datetime.now(UTC),
+            ),
+        ]
+
+        for article in test_articles:
+            result = await normalizer.normalize(article)
+            assert result is not None
+            assert result.published_at is not None, f"published_at is None for article: {article.title}"
+            assert result.published_at.tzinfo == UTC, f"published_at not UTC for: {article.title}"

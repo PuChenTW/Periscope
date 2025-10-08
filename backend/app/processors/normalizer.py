@@ -6,6 +6,7 @@ fetcher provides, ensuring consistent data quality before AI processing.
 """
 
 import textwrap
+from datetime import UTC, datetime
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from loguru import logger
@@ -110,6 +111,9 @@ class ContentNormalizer:
             logger.debug(f"Article '{article.title[:50]}...' rejected during content validation")
             return None
 
+        # Phase 1.5: Date normalization - ensure UTC-aware published_at
+        article = self._normalize_date(article)
+
         # Phase 2: Metadata standardization
         article = self._normalize_title(article)
         article = self._normalize_author(article)
@@ -198,6 +202,43 @@ class ContentNormalizer:
             logger.error(f"Error during AI spam detection for article '{article.title[:50]}...': {e}")
             # On error, return False (not spam) to avoid false rejections
             return False
+
+    def _normalize_date(self, article: Article) -> Article:
+        """
+        Normalize article published date to ensure UTC-aware timezone.
+
+        Handles:
+        - Naive datetime → Convert to UTC-aware
+        - Non-UTC timezone → Convert to UTC
+        - UTC timezone → Preserve unchanged
+
+        Args:
+            article: Article to normalize
+
+        Returns:
+            Article with normalized UTC-aware published_at
+        """
+        # published_at should never be None (handled by fetcher)
+        if article.published_at is None:
+            # This shouldn't happen, but if it does, log warning and use fetch_timestamp
+            logger.warning(f"Article '{article.title[:50]}...' has None published_at, using fetch_timestamp")
+            article.published_at = article.fetch_timestamp
+            return article
+
+        # Handle naive datetime (no timezone info)
+        if article.published_at.tzinfo is None:
+            # Assume naive datetime is UTC and mark it as such
+            article.published_at = article.published_at.replace(tzinfo=UTC)
+            logger.debug(f"Article '{article.title[:50]}...' has naive datetime, converting to UTC-aware")
+            return article
+
+        # Handle aware datetime that's not in UTC
+        if article.published_at.tzinfo != UTC:
+            # Convert to UTC
+            article.published_at = article.published_at.astimezone(UTC)
+            logger.debug(f"Article '{article.title[:50]}...' converted from {article.published_at.tzinfo} to UTC")
+
+        return article
 
     def _normalize_title(self, article: Article) -> Article:
         """
@@ -370,6 +411,9 @@ if __name__ == "__main__":
         normalizer = ContentNormalizer()
         print("\n✓ Initialized ContentNormalizer with AI-powered spam detection")
 
+        # Use current UTC time as fetch_timestamp for all tests
+        fetch_timestamp = datetime.now(UTC)
+
         # Test 1: Valid article (should pass)
         print("\n" + "-" * 80)
         print("Test 1: Valid news article")
@@ -384,6 +428,7 @@ if __name__ == "__main__":
                 intelligence technology. The release comes after months of rigorous testing and safety evaluations.
             """),
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=fetch_timestamp,
             author="Tech Reporter",
             tags=["AI", "Technology"],
         )
@@ -408,6 +453,7 @@ if __name__ == "__main__":
                 This is your chance to WIN BIG!!! Congratulations you are selected!!!
             """),
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=fetch_timestamp,
         )
 
         result = await normalizer.normalize(spam_article)
@@ -425,6 +471,7 @@ if __name__ == "__main__":
             url=HttpUrl("https://example.com/short"),
             content="This is too short.",
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=fetch_timestamp,
         )
 
         result = await normalizer.normalize(short_article)
@@ -447,6 +494,7 @@ if __name__ == "__main__":
                 Industry analysts expect strong demand for the latest iteration of Apple's flagship product.
             """),
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=fetch_timestamp,
             author="Apple Press",
             tags=["Apple", "iPhone", "Technology"],
         )

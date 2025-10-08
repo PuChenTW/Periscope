@@ -2,7 +2,7 @@
 Tests for QualityScorer implementation
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -60,6 +60,7 @@ class TestQualityScorer:
             content="A" * 1200,  # >1000 chars
             author="John Doe",
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=datetime.now(UTC),
             tags=["ai", "tech"],
         )
 
@@ -80,6 +81,7 @@ class TestQualityScorer:
             title="Minimal Article",
             url=HttpUrl("https://example.com/test"),
             content="A" * 300,  # >100 but <500 chars
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await quality_scorer_disabled.calculate_quality_score(minimal_article)
@@ -98,6 +100,7 @@ class TestQualityScorer:
             content="Valid content with enough length to pass validation checks.",
             author="John Doe",
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=datetime.now(UTC),
             tags=["ai"],
         )
 
@@ -120,6 +123,7 @@ class TestQualityScorer:
             url=HttpUrl("https://example.com/test"),
             content="A" * 600,  # >500 chars
             author="John Doe",
+            fetch_timestamp=datetime.now(UTC),
         )
 
         result = await quality_scorer_disabled.calculate_quality_score(article)

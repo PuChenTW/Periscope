@@ -150,9 +150,11 @@ class TestEdgeCases:
             assert result.success is True
             assert len(result.articles) == 4
 
-            # All articles should have published_at as None due to malformed dates
+            # All articles should have published_at fallback to fetch_timestamp due to malformed dates
             for article in result.articles:
-                assert article.published_at is None
+                assert article.published_at is not None
+                # Published_at should equal fetch_timestamp when parsing fails
+                assert article.published_at == article.fetch_timestamp
 
     @pytest.mark.asyncio
     async def test_deeply_nested_html_content(self):

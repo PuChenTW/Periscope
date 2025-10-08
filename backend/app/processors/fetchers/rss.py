@@ -1,7 +1,7 @@
 import html
 import re
 from contextlib import suppress
-from datetime import datetime
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 
 import feedparser
@@ -40,7 +40,7 @@ class RSSFetcher(BaseFetcher):
             return FetchResult(
                 source_info=SourceInfo(title="Invalid URL", url=source_url),
                 articles=[],
-                fetch_timestamp=datetime.now(),
+                fetch_timestamp=datetime.now(UTC),
                 success=False,
                 error_message="Invalid URL format",
             )
@@ -55,22 +55,25 @@ class RSSFetcher(BaseFetcher):
                 return FetchResult(
                     source_info=await self.get_source_info(url),
                     articles=[],
-                    fetch_timestamp=datetime.now(),
+                    fetch_timestamp=datetime.now(UTC),
                     success=False,
                     error_message="No articles found in feed",
                 )
 
+            fetch_timestamp = datetime.now(UTC)
             source_info = await self._extract_source_info(feed, url)
-            articles = await self._extract_articles(feed.entries[: self.max_articles])
+            articles = await self._extract_articles(feed.entries[: self.max_articles], fetch_timestamp)
 
-            return FetchResult(source_info=source_info, articles=articles, fetch_timestamp=datetime.now(), success=True)
+            return FetchResult(
+                source_info=source_info, articles=articles, fetch_timestamp=fetch_timestamp, success=True
+            )
 
         except FetchTimeoutError:
             logger.warning(f"Timeout fetching RSS feed: {url}")
             return FetchResult(
                 source_info=SourceInfo(title="Timeout", url=HttpUrl(url)),
                 articles=[],
-                fetch_timestamp=datetime.now(),
+                fetch_timestamp=datetime.now(UTC),
                 success=False,
                 error_message="Request timeout",
             )
@@ -79,7 +82,7 @@ class RSSFetcher(BaseFetcher):
             return FetchResult(
                 source_info=SourceInfo(title="Error", url=HttpUrl(url)),
                 articles=[],
-                fetch_timestamp=datetime.now(),
+                fetch_timestamp=datetime.now(UTC),
                 success=False,
                 error_message=str(e),
             )
@@ -120,13 +123,13 @@ class RSSFetcher(BaseFetcher):
             },
         )
 
-    async def _extract_articles(self, entries: list) -> list[Article]:
+    async def _extract_articles(self, entries: list, fetch_timestamp: datetime) -> list[Article]:
         """Extract articles from RSS feed entries."""
         articles = []
 
         for entry in entries:
             try:
-                article = await self._parse_entry(entry)
+                article = await self._parse_entry(entry, fetch_timestamp)
                 if article:
                     articles.append(article)
             except Exception as e:
@@ -135,7 +138,7 @@ class RSSFetcher(BaseFetcher):
 
         return articles
 
-    async def _parse_entry(self, entry) -> Article | None:
+    async def _parse_entry(self, entry, fetch_timestamp: datetime) -> Article | None:
         """Parse individual RSS entry into Article."""
         try:
             # Extract title
@@ -165,6 +168,10 @@ class RSSFetcher(BaseFetcher):
                 with suppress(Exception):
                     published_at = parsedate_to_datetime(entry.published)
 
+            # Fallback: if no published_at from feed, use fetch_timestamp
+            if published_at is None:
+                published_at = fetch_timestamp
+
             # Extract author
             author = None
             if entry.get("author"):
@@ -182,6 +189,7 @@ class RSSFetcher(BaseFetcher):
                 url=HttpUrl(link),
                 content=content,
                 published_at=published_at,
+                fetch_timestamp=fetch_timestamp,
                 author=author,
                 tags=tags,
                 metadata={

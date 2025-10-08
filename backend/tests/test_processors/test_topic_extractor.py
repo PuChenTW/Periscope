@@ -2,7 +2,7 @@
 Tests for TopicExtractor implementation using PydanticAI
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -39,6 +39,7 @@ class TestTopicExtractor:
     @pytest.fixture
     def sample_articles(self):
         """Create sample articles for testing."""
+        fetch_time = datetime.now(UTC)
         return [
             Article(
                 title="OpenAI Launches GPT-5 with Revolutionary Features",
@@ -50,6 +51,7 @@ class TestTopicExtractor:
                     "intelligence technology."
                 ),
                 published_at=datetime(2024, 1, 15, 10, 0),
+                fetch_timestamp=fetch_time,
                 tags=["AI", "OpenAI", "GPT"],
             ),
             Article(
@@ -61,6 +63,7 @@ class TestTopicExtractor:
                     "The study calls for immediate action to reduce greenhouse gas emissions and adapt infrastructure."
                 ),
                 published_at=datetime(2024, 1, 15, 11, 0),
+                fetch_timestamp=fetch_time,
                 tags=["climate", "science"],
             ),
             Article(
@@ -68,6 +71,7 @@ class TestTopicExtractor:
                 url=HttpUrl("https://example.com/article3"),
                 content="Short.",
                 published_at=datetime(2024, 1, 15, 9, 0),
+                fetch_timestamp=fetch_time,
                 tags=[],
             ),
             Article(
@@ -75,6 +79,7 @@ class TestTopicExtractor:
                 url=HttpUrl("https://example.com/article4"),
                 content="",
                 published_at=datetime(2024, 1, 15, 9, 0),
+                fetch_timestamp=fetch_time,
                 tags=[],
             ),
         ]
@@ -214,6 +219,7 @@ class TestTopicExtractor:
             url=HttpUrl("https://example.com/long"),
             content=long_content,
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=datetime.now(UTC),
             tags=[],
         )
 
@@ -283,6 +289,7 @@ class TestTopicExtractor:
             url=HttpUrl("https://example.com/whitespace"),
             content="   \n\t  \n   ",  # Only whitespace
             published_at=datetime(2024, 1, 15, 10, 0),
+            fetch_timestamp=datetime.now(UTC),
             tags=[],
         )
 

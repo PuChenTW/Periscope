@@ -8,7 +8,7 @@ different sources and group them together based on content similarity.
 import hashlib
 import json
 import textwrap
-from datetime import datetime
+from datetime import UTC, datetime
 
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -50,7 +50,7 @@ class ArticleGroup(BaseModel):
     similar_articles: list[Article] = Field(default_factory=list, description="Other similar articles in the group")
     common_topics: list[str] = Field(default_factory=list, description="Common topics across all articles")
     group_id: str = Field(description="Unique identifier for this group")
-    created_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class SimilarityDetector:
@@ -326,7 +326,6 @@ if __name__ == "__main__":
             ),
             tags=["AI", "technology"],
             ai_topics=["artificial intelligence", "machine learning"],
-            fetched_at=datetime.now(),
         )
 
         article2 = Article(
@@ -339,7 +338,6 @@ if __name__ == "__main__":
             ),
             tags=["AI", "tech news"],
             ai_topics=["artificial intelligence", "language models"],
-            fetched_at=datetime.now(),
         )
 
         article3 = Article(
@@ -351,7 +349,6 @@ if __name__ == "__main__":
             ),
             tags=["Python", "programming"],
             ai_topics=["programming languages", "software development"],
-            fetched_at=datetime.now(),
         )
 
         # Initialize detector with cache
