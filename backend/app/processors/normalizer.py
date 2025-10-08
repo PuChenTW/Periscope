@@ -24,15 +24,6 @@ class SpamDetectionResult(BaseModel):
     reasoning: str = Field(description="Explanation of the spam determination")
 
 
-class ContentQualityResult(BaseModel):
-    """AI-powered content quality assessment result."""
-
-    writing_quality: int = Field(description="Writing quality and coherence score (0-20)", ge=0, le=20)
-    informativeness: int = Field(description="Informativeness and depth score (0-20)", ge=0, le=20)
-    credibility: int = Field(description="Credibility and sourcing score (0-10)", ge=0, le=10)
-    reasoning: str = Field(description="Explanation of the quality assessment")
-
-
 class ContentNormalizer:
     """
     Normalizes article content and metadata for consistent processing.
@@ -51,7 +42,6 @@ class ContentNormalizer:
         author_max_length: int = 100,
         tag_max_length: int = 50,
         max_tags_per_article: int = 20,
-        quality_scoring_enabled: bool = True,
         ai_provider: AIProvider | None = None,
     ):
         """
@@ -65,7 +55,6 @@ class ContentNormalizer:
             author_max_length: Maximum author name length (default: 100)
             tag_max_length: Maximum tag length (default: 50)
             max_tags_per_article: Maximum tags per article (default: 20)
-            quality_scoring_enabled: Enable AI-powered quality assessment (default: True)
             ai_provider: AI provider instance (creates default if not provided)
         """
         self.content_min_length = content_min_length
@@ -75,7 +64,6 @@ class ContentNormalizer:
         self.author_max_length = author_max_length
         self.tag_max_length = tag_max_length
         self.max_tags_per_article = max_tags_per_article
-        self.quality_scoring_enabled = quality_scoring_enabled
 
         # Create AI provider if not injected
         settings = get_settings()
@@ -107,35 +95,6 @@ class ContentNormalizer:
             """),
         )
 
-        # Initialize PydanticAI agent for quality assessment
-        self.quality_agent = provider.create_agent(
-            output_type=ContentQualityResult,
-            system_prompt=textwrap.dedent("""\
-                You are an expert at assessing content quality.
-                Your task is to evaluate article quality across three dimensions:
-
-                1. Writing Quality (0-20 points):
-                   - Clear and coherent writing style
-                   - Proper grammar and structure
-                   - Logical flow and organization
-                   - Readability and engagement
-
-                2. Informativeness (0-20 points):
-                   - Depth of information provided
-                   - Coverage of the topic
-                   - Value and usefulness to readers
-                   - Specific details and insights
-
-                3. Credibility (0-10 points):
-                   - Evidence of research or sources
-                   - Balanced perspective
-                   - Professional tone
-                   - Trustworthiness indicators
-
-                Provide scores for each dimension and clear reasoning for your assessment.
-            """),
-        )
-
     async def normalize(self, article: Article) -> Article | None:
         """
         Normalize an article's content and metadata.
@@ -157,9 +116,6 @@ class ContentNormalizer:
         article = self._normalize_tags(article)
         article = self._normalize_url(article)
         article = self._enforce_content_length(article)
-
-        # Phase 3: Hybrid quality scoring
-        article = await self._calculate_quality_score(article)
 
         return article
 
@@ -392,130 +348,6 @@ class ContentNormalizer:
 
         article.content = truncated
         logger.debug(f"Content truncated from {original_length} to {len(truncated)} chars")
-
-        return article
-
-    def _calculate_metadata_score(self, article: Article) -> int:
-        """
-        Calculate rule-based metadata completeness score (0-50 points).
-
-        Scoring:
-        - Has author: +10
-        - Has published_at: +10
-        - Has tags (1+): +5
-        - Content > 500 chars: +15
-        - Content > 1000 chars: +10 bonus
-
-        Args:
-            article: Article to score
-
-        Returns:
-            Metadata score (0-50)
-        """
-        score = 0
-
-        # Author presence
-        if article.author and article.author.strip():
-            score += 10
-
-        # Published date presence
-        if article.published_at:
-            score += 10
-
-        # Tags presence
-        if article.tags and len(article.tags) > 0:
-            score += 5
-
-        # Content length scoring
-        content_length = len(article.content) if article.content else 0
-        if content_length > 500:
-            score += 15
-            if content_length > 1000:
-                score += 10  # Bonus for longer content
-
-        return score
-
-    async def _assess_content_quality(self, article: Article) -> ContentQualityResult:
-        """
-        Assess content quality using AI (0-50 points).
-
-        Args:
-            article: Article to assess
-
-        Returns:
-            ContentQualityResult with scores for writing, informativeness, credibility
-        """
-        # Truncate content to avoid token limits (use first 1500 chars for quality assessment)
-        content = article.content[:1500] if article.content else ""
-
-        # Build prompt for AI quality assessment
-        prompt = textwrap.dedent(f"""\
-            Article Title: {article.title}
-            Content: {content}
-
-            Assess the quality of this article content across three dimensions:
-            1. Writing Quality (0-20): Clarity, coherence, grammar, structure
-            2. Informativeness (0-20): Depth, coverage, value, insights
-            3. Credibility (0-10): Evidence, balance, professionalism
-        """)
-
-        try:
-            # Run AI quality assessment
-            result = await self.quality_agent.run(prompt)
-            quality_result = result.output
-
-            logger.debug(
-                f"Quality assessment for '{article.title[:50]}...': "
-                f"writing={quality_result.writing_quality}, "
-                f"info={quality_result.informativeness}, "
-                f"credibility={quality_result.credibility}"
-            )
-
-            return quality_result
-
-        except Exception as e:
-            logger.error(f"Error during AI quality assessment for article '{article.title[:50]}...': {e}")
-            # On error, return neutral scores
-            return ContentQualityResult(
-                writing_quality=10,
-                informativeness=10,
-                credibility=5,
-                reasoning="Error during assessment, using neutral scores",
-            )
-
-    async def _calculate_quality_score(self, article: Article) -> Article:
-        """
-        Calculate hybrid quality score combining rule-based and AI assessment.
-
-        Args:
-            article: Article to score
-
-        Returns:
-            Article with quality_score in metadata
-        """
-        # Calculate rule-based metadata score (0-50)
-        metadata_score = self._calculate_metadata_score(article)
-
-        # Calculate AI-powered content quality score (0-50) and combine
-        ai_content_score = 0
-        if self.quality_scoring_enabled:
-            quality_result = await self._assess_content_quality(article)
-            ai_content_score = (
-                quality_result.writing_quality + quality_result.informativeness + quality_result.credibility
-            )
-            quality_score = metadata_score + ai_content_score
-        else:
-            # When AI scoring is disabled, scale metadata score to 0-100
-            quality_score = metadata_score * 2
-
-        # Store in metadata
-        article.metadata["quality_score"] = quality_score
-        article.metadata["quality_breakdown"] = {"metadata_score": metadata_score, "ai_content_score": ai_content_score}
-
-        logger.debug(
-            f"Quality score for '{article.title[:50]}...': "
-            f"total={quality_score}, metadata={metadata_score}, ai={ai_content_score}"
-        )
 
         return article
 
