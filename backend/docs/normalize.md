@@ -6,11 +6,11 @@ The Content Normalization module standardizes article structure and metadata bey
 
 **Location:** `app/processors/normalizer.py`
 
-**Status:** ✅ Phase 2 Complete (Metadata Standardization with Hybrid Quality Scoring)
+**Status:** ✅ Phase 2 Complete (Content Validation and Metadata Standardization)
 
 **Pipeline Position:**
 ```
-RSS Fetcher → ContentNormalizer → TopicExtractor → SimilarityDetector → Summarizer → Digest
+RSS Fetcher → ContentNormalizer → QualityScorer → TopicExtractor → SimilarityDetector → Summarizer → Digest
 ```
 
 ## Implementation Status
@@ -19,11 +19,10 @@ RSS Fetcher → ContentNormalizer → TopicExtractor → SimilarityDetector → 
 - **AI-Powered Spam Detection**: Uses PydanticAI with configurable providers (Gemini/OpenAI)
 - **Content Validation**: Empty content check, minimum/maximum length enforcement
 - **Metadata Standardization**: Author normalization, tag deduplication, title validation, URL cleaning
-- **Hybrid Quality Scoring**: Rule-based metadata scoring + AI-powered content assessment (0-100 scale)
 - **Content Management**: Smart truncation at word boundaries, tracking parameter removal
 - **Async Architecture**: Full async/await support for AI integration
 - **Dependency Injection**: Constructor-based configuration and AI provider injection
-- **Comprehensive Testing**: 28 tests covering validation, normalization, and quality scoring
+- **Comprehensive Testing**: 22 tests covering validation and normalization
 
 ### 📋 Planned Features (Future Phases)
 - Date handling (fallback to fetch_timestamp)
@@ -232,80 +231,7 @@ class SpamDetectionResult(BaseModel):
 # Output: Article with metadata["detected_language"] = "es" + warning logged
 ```
 
-### 7. Hybrid Quality Scoring ✅ (IMPLEMENTED)
-
-**Purpose:** Ranks articles by combining metadata completeness and AI-assessed content quality
-
-**Implementation:** Two-component hybrid scoring system
-
-#### Rule-Based Component (0-50 points)
-**Metadata Completeness Scoring:**
-- Has author: +10 points
-- Has published_at: +10 points
-- Has tags (1+): +5 points
-- Content length > 500 chars: +15 points
-- Content length > 1000 chars: +10 points (bonus)
-
-#### AI-Powered Component (0-50 points)
-**Content Quality Assessment using PydanticAI:**
-
-```python
-class ContentQualityResult(BaseModel):
-    writing_quality: int      # 0-20 points
-    informativeness: int      # 0-20 points
-    credibility: int          # 0-10 points
-    reasoning: str
-```
-
-**Assessment Criteria:**
-- **Writing Quality (0-20)**: Clarity, coherence, grammar, structure, readability
-- **Informativeness (0-20)**: Depth, coverage, value, insights, specific details
-- **Credibility (0-10)**: Evidence, balanced perspective, professional tone
-
-**Final Score:** metadata_score + ai_content_score = 0-100 points
-
-**Configuration:**
-- `quality_scoring_enabled`: Toggle AI quality assessment (default: True)
-- When disabled, metadata score is scaled to 0-100 range
-
-**Why Hybrid Approach:**
-- Fast rule-based metrics for objective completeness
-- Deep AI analysis for subjective content quality
-- Balanced scoring resistant to manipulation
-- Graceful degradation when AI unavailable
-
-**Storage:**
-Scores stored in `article.metadata`:
-```python
-{
-    "quality_score": 64,
-    "quality_breakdown": {
-        "metadata_score": 25,
-        "ai_content_score": 39
-    }
-}
-```
-
-**Example:**
-```python
-# Complete article: author ✓, date ✓, tags ✓, >1000 chars, high AI quality
-# Metadata: 10 + 10 + 5 + 15 + 10 = 50 points
-# AI: writing(18) + info(17) + cred(9) = 44 points
-# Total: 94/100
-
-# Minimal article: no metadata, basic content
-# Metadata: 0 points (scaled to 0 when AI disabled)
-# AI: writing(10) + info(10) + cred(5) = 25 points (or 0 if disabled)
-# Total: 0-25/100
-```
-
-**Why needed:**
-- Prioritize high-quality articles when feed has >100 items
-- More accurate than metadata-only scoring
-- Fallback to rule-based when AI processing fails
-- Enables future "digest preview" features
-
-### 8. Title Validation ✅ (IMPLEMENTED)
+### 7. Title Validation ✅ (IMPLEMENTED)
 
 **Purpose:** Ensures every article has a usable title
 
@@ -344,7 +270,6 @@ def __init__(
     author_max_length: int = 100,
     tag_max_length: int = 50,
     max_tags_per_article: int = 20,
-    quality_scoring_enabled: bool = True,
     ai_provider: AIProvider | None = None,
 )
 ```
@@ -354,12 +279,6 @@ def __init__(
 class SpamDetectionResult(BaseModel):
     is_spam: bool
     confidence: float
-    reasoning: str
-
-class ContentQualityResult(BaseModel):
-    writing_quality: int      # 0-20
-    informativeness: int      # 0-20
-    credibility: int          # 0-10
     reasoning: str
 ```
 
@@ -376,18 +295,13 @@ def _normalize_author(self, article: Article) -> Article
 def _normalize_tags(self, article: Article) -> Article
 def _normalize_url(self, article: Article) -> Article
 def _enforce_content_length(self, article: Article) -> Article
-
-# Phase 2: Hybrid Quality Scoring
-def _calculate_metadata_score(self, article: Article) -> int
-async def _assess_content_quality(self, article: Article) -> ContentQualityResult
-async def _calculate_quality_score(self, article: Article) -> Article
 ```
 
 **Key Implementation Details:**
-- ✅ **Dual AI Agents** - Separate `spam_agent` and `quality_agent` for different tasks
+- ✅ **Single AI Agent** - `spam_agent` for spam detection
 - ✅ **Async methods** - Required for AI provider integration
 - ✅ **Parameter-based config** - No longer stores Settings object, accepts specific parameters
-- ✅ **AI provider injection** - Uses AIProvider abstraction for spam detection and quality assessment
+- ✅ **AI provider injection** - Uses AIProvider abstraction for spam detection
 - ✅ **Structured outputs** - Pydantic models for AI results with validation
 
 **Key Design Principles:**
@@ -414,7 +328,6 @@ title_max_length: int = Field(500, env="TITLE_MAX_LENGTH")
 author_max_length: int = Field(100, env="AUTHOR_MAX_LENGTH")
 tag_max_length: int = Field(50, env="TAG_MAX_LENGTH")
 max_tags_per_article: int = Field(20, env="MAX_TAGS_PER_ARTICLE")
-quality_scoring_enabled: bool = Field(True, env="QUALITY_SCORING_ENABLED")
 ```
 
 **Environment Variables:**
@@ -426,50 +339,41 @@ TITLE_MAX_LENGTH=500                # Maximum title length
 AUTHOR_MAX_LENGTH=100               # Maximum author name length
 TAG_MAX_LENGTH=50                   # Maximum individual tag length
 MAX_TAGS_PER_ARTICLE=20             # Maximum tags per article
-QUALITY_SCORING_ENABLED=true        # Enable AI-powered quality assessment
 ```
 
 ## Test Suite
 
 **Location:** `tests/test_processors/test_normalizer.py`
 
-**Current Status:** ✅ 28 tests implemented and passing
+**Current Status:** ✅ 22 tests implemented and passing
 
 ### Implemented Test Scenarios (Phase 1 & 2)
 
-**Phase 1 - Content Validation (13 tests):**
+**Phase 1 - Content Validation (11 tests):**
 1. ✅ **Valid Article Normalization** - Complete article passes validation
 2. ✅ **Empty Content Rejection** - Articles with empty/None content are rejected
 3. ✅ **Whitespace-Only Content** - Whitespace-only content is rejected
 4. ✅ **Content Too Short** - Below minimum length is rejected
-5. ✅ **Content Exactly Minimum Length** - Exactly 100 chars passes
-6. ✅ **Content Just Below Minimum** - 99 chars is rejected
-7. ✅ **Unicode Content** - Unicode characters handled correctly
-8. ✅ **Emoji Content** - Emojis in content handled properly
-9. ✅ **Custom Min Length Setting** - Custom length parameter respected
-10. ✅ **AI Spam Detection Enabled** - Spam content detected and rejected
-11. ✅ **Spam Detection Disabled** - Can disable spam detection via parameter
-12. ✅ **Minimal Metadata** - Articles with only required fields accepted
-13. ✅ **Field Preservation** - Article fields preserved during normalization
+5. ✅ **Content Exactly Minimum Length** - Exactly minimum chars passes
+6. ✅ **Unicode Content** - Unicode characters handled correctly
+7. ✅ **Emoji Content** - Emojis in content handled properly
+8. ✅ **AI Spam Detection Enabled** - Spam content detected and rejected
+9. ✅ **Spam Detection Disabled** - Can disable spam detection via parameter
+10. ✅ **Minimal Metadata** - Articles with only required fields accepted
+11. ✅ **Field Preservation** - Article fields preserved during normalization
 
 **Phase 2 - Metadata Normalization (11 tests):**
-14. ✅ **Title Whitespace Cleanup** - Multiple spaces and newlines normalized
-15. ✅ **Title Truncation** - Long titles truncated at word boundaries
-16. ✅ **Title Empty Fallback** - Empty titles get "Untitled Article" fallback
-17. ✅ **Author Title Case** - Author names converted to title case
-18. ✅ **Author Truncation** - Long author names truncated properly
-19. ✅ **Tag Deduplication** - Duplicate tags removed after normalization
-20. ✅ **Tag Max Limit** - Articles limited to max tags per article
-21. ✅ **Tag Length Limit** - Individual tags truncated to max length
-22. ✅ **URL Tracking Params Removal** - utm_* and ref params removed
-23. ✅ **URL HTTPS Upgrade** - http:// URLs upgraded to https://
-24. ✅ **Content Length Truncation** - Long content truncated at word boundaries
-
-**Phase 2 - Hybrid Quality Scoring (4 tests):**
-25. ✅ **Metadata Score Calculation** - Rule-based scoring works correctly
-26. ✅ **Metadata Score Minimal** - Minimal articles scored appropriately
-27. ✅ **Hybrid Quality Scoring Enabled** - Combined metadata + AI scoring
-28. ✅ **Quality Scoring Disabled** - AI scoring can be disabled
+12. ✅ **Title Whitespace Cleanup** - Multiple spaces and newlines normalized
+13. ✅ **Title Truncation** - Long titles truncated at word boundaries
+14. ✅ **Title Empty Fallback** - Empty titles get "Untitled Article" fallback
+15. ✅ **Author Title Case** - Author names converted to title case
+16. ✅ **Author Truncation** - Long author names truncated properly
+17. ✅ **Tag Deduplication** - Duplicate tags removed after normalization
+18. ✅ **Tag Max Limit** - Articles limited to max tags per article
+19. ✅ **Tag Length Limit** - Individual tags truncated to max length
+20. ✅ **URL Tracking Params Removal** - utm_* and ref params removed
+21. ✅ **URL HTTPS Upgrade** - http:// URLs upgraded to https://
+22. ✅ **Content Length Truncation** - Long content truncated at word boundaries
 
 ### Planned Test Scenarios (Future Phases)
 
@@ -485,23 +389,26 @@ Tests use **async/await** pattern with mock AI provider for deterministic testin
 def mock_ai_provider(self):
     """Create a mock AI provider for testing."""
     mock_provider = MagicMock()
-    mock_provider.create_agent = lambda output_type, system_prompt: Agent(
-        TestModel(), output_type=output_type, system_prompt=system_prompt
-    )
+
+    def create_agent_mock(output_type, system_prompt):
+        if output_type == SpamDetectionResult:
+            test_model = TestModel(
+                custom_output_args=SpamDetectionResult(
+                    is_spam=False, confidence=0.9, reasoning="Valid article"
+                )
+            )
+        else:
+            test_model = TestModel()
+        return Agent(test_model, output_type=output_type, system_prompt=system_prompt)
+
+    mock_provider.create_agent = create_agent_mock
     return mock_provider
 
 @pytest.mark.asyncio
 async def test_normalize_valid_article(self, normalizer):
     """Test normalization with AI spam detection."""
     # Uses TestModel from pydantic_ai for deterministic AI responses
-    test_model = TestModel(
-        custom_output_args=SpamDetectionResult(
-            is_spam=False, confidence=0.95, reasoning="Legitimate article"
-        )
-    )
-    with normalizer.spam_agent.override(model=spam_model):
-        with normalizer.quality_agent.override(model=quality_model):
-            result = await normalizer.normalize(article)
+    result = await normalizer.normalize(article)
     assert result is not None
 ```
 
@@ -513,6 +420,7 @@ async def test_normalize_valid_article(self, normalizer):
 from app.config import get_settings
 from app.processors.fetchers.factory import create_fetcher
 from app.processors.normalizer import ContentNormalizer
+from app.processors.quality_scorer import QualityScorer
 from app.processors.topic_extractor import TopicExtractor
 from app.processors.similarity_detector import SimilarityDetector
 
@@ -523,7 +431,7 @@ async def process_content(source_url: str):
     fetcher = create_fetcher(source_url)
     fetch_result = await fetcher.fetch_content(source_url)
 
-    # Step 2: Normalize articles (with AI spam detection and quality scoring)
+    # Step 2: Normalize articles (with AI spam detection)
     normalizer = ContentNormalizer(
         content_min_length=settings.content_min_length,
         content_max_length=settings.content_max_length,
@@ -532,7 +440,6 @@ async def process_content(source_url: str):
         author_max_length=settings.author_max_length,
         tag_max_length=settings.tag_max_length,
         max_tags_per_article=settings.max_tags_per_article,
-        quality_scoring_enabled=settings.quality_scoring_enabled,
     )
 
     normalized_articles = []
@@ -543,14 +450,24 @@ async def process_content(source_url: str):
 
     logger.info(f"Normalized {len(normalized_articles)}/{len(fetch_result.articles)} articles")
 
-    # Step 3: Extract topics
-    topic_extractor = TopicExtractor()
+    # Step 3: Calculate quality scores
+    quality_scorer = QualityScorer(
+        quality_scoring_enabled=settings.quality_scoring_enabled,
+    )
+
+    scored_articles = []
     for article in normalized_articles:
+        scored = await quality_scorer.calculate_quality_score(article)
+        scored_articles.append(scored)
+
+    # Step 4: Extract topics
+    topic_extractor = TopicExtractor()
+    for article in scored_articles:
         article.ai_topics = await topic_extractor.extract_topics(article)
 
-    # Step 4: Detect similarity and group
+    # Step 5: Detect similarity and group
     similarity_detector = SimilarityDetector()
-    article_groups = await similarity_detector.detect_similar_articles(normalized_articles)
+    article_groups = await similarity_detector.detect_similar_articles(scored_articles)
 
     return article_groups
 ```
@@ -591,7 +508,7 @@ This ensures the pipeline continues processing even with problematic articles.
 - ✅ All tests passing (13/13)
 - ✅ Integration with AI provider abstraction
 
-### Phase 2 - Metadata & Enrichment ✅ COMPLETED
+### Phase 2 - Metadata & Content Management ✅ COMPLETED
 
 - ✅ Implement metadata standardization:
   - ✅ Author normalization (title case, length limits)
@@ -601,12 +518,9 @@ This ensures the pipeline continues processing even with problematic articles.
   - ✅ Content length enforcement (max 50,000 chars)
   - ✅ Smart truncation at word boundaries
   - ✅ URL normalization (tracking params, scheme)
-- ✅ Implement hybrid quality scoring (0-100 scale):
-  - ✅ Rule-based metadata scoring (0-50 points)
-  - ✅ AI-powered content quality assessment (0-50 points)
-- ✅ Add additional configuration settings (8 total)
-- ✅ Expand test suite to 28 tests
-- ✅ All tests passing (28/28)
+- ✅ Add configuration settings (7 total)
+- ✅ Test suite with 22 comprehensive tests
+- ✅ All tests passing (22/22)
 
 ### Phase 3 - Future Enhancements 📋 PLANNED
 
@@ -627,14 +541,13 @@ This ensures the pipeline continues processing even with problematic articles.
 - ✅ Logging provides visibility into rejection reasons
 - ✅ Async architecture supports AI integration
 
-### Phase 2 (Metadata & Quality) ✅ ACHIEVED
+### Phase 2 (Metadata & Content Management) ✅ ACHIEVED
 
-- ✅ Hybrid quality score accurately reflects article completeness and content quality
 - ✅ Metadata standardization complete (title, author, tags, URL)
 - ✅ Content management implemented (max length, smart truncation)
-- ✅ Test coverage expanded to 28 comprehensive tests
+- ✅ Test coverage: 22 comprehensive tests
 - ✅ All Phase 2 features implemented and tested
-- ✅ Graceful degradation when AI scoring disabled
+- ✅ Clean separation of concerns (normalization vs quality scoring)
 
 ### Phase 3 (Future) 📋 PENDING
 
@@ -647,8 +560,13 @@ This ensures the pipeline continues processing even with problematic articles.
 
 - **Multi-language support:** Full language detection and filtering
 - **Advanced spam detection:** Enhanced ML-based spam classification with evolving patterns
-- **Enhanced quality scoring:** Advanced AI models for deeper content analysis
 - **Content summarization preview:** Generate preview snippets for digest previews
 - **Media extraction:** Extract and validate images, videos from content
 - **Duplicate detection:** Hash-based deduplication before AI processing
 - **Performance optimization:** Batch AI processing, caching strategies
+
+## Related Documentation
+
+- **Quality Scoring**: See `docs/quality_scorer.md` for hybrid quality assessment (decoupled from normalizer)
+- **Topic Extraction**: See `docs/topic_extractor.md` for AI-powered topic identification
+- **Similarity Detection**: See `docs/similarity_detector.md` for article grouping
