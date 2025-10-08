@@ -353,10 +353,7 @@ class TestEdgeCases:
 
             mock_http.return_value.__aenter__.side_effect = track_calls
 
-            results = []
-            for i, url in enumerate(urls):
-                result = await fetcher.fetch_content(url)
-                results.append(result)
+            results = [await fetcher.fetch_content(url) for url in urls]
 
             # Each should get its own unique content
             assert len(results) == 5

@@ -311,17 +311,15 @@ class ContentNormalizer:
         normalized_tags = []
         seen = set()
 
-        for tag in article.tags:
+        for t in article.tags:
             # Clean up and lowercase
-            tag = tag.strip().lower()
+            tag = t.strip().lower()
 
             # Skip empty tags
             if not tag:
                 continue
 
-            # Enforce tag length limit
-            if len(tag) > self.tag_max_length:
-                tag = tag[: self.tag_max_length]
+            tag = tag[: self.tag_max_length]
 
             # Deduplicate
             if tag not in seen:

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.processors.fetchers.exceptions import ValidationError
 from app.processors.fetchers.factory import auto_create_fetcher
 from app.processors.fetchers.rss import RSSFetcher
 from app.processors.utils.url_validation import check_url_health, validate_rss_feed
@@ -235,7 +236,7 @@ class TestRSSFetchingIntegration:
                         assert result.success is True
                     else:
                         # Should raise exception for invalid URLs
-                        with pytest.raises(Exception):
+                        with pytest.raises(ValidationError):
                             await validate_rss_feed(url)
 
                 except Exception as e:
