@@ -52,6 +52,10 @@ Use Pydantic BaseSettings for type-safe configuration management. All configurat
 - `TOPIC_EXTRACTION_MAX_TOPICS`: Maximum topics per article (default: 5, range: 1-10)
 - `TOPIC_EXTRACTION_CONTENT_LENGTH`: Max content chars for extraction (default: 1000)
 
+### Summarization Configuration
+- `SUMMARY_MAX_LENGTH`: Maximum words in summary (default: 500)
+- `SUMMARY_CONTENT_LENGTH`: Maximum content chars sent to AI for summarization (default: 2000)
+
 ### Content Processing Configuration
 - `HTTP_CLIENT_TIMEOUT`: Default HTTP request timeout in seconds (default: 30)
 - `HTTP_CLIENT_MAX_RETRIES`: Maximum retry attempts (default: 3)

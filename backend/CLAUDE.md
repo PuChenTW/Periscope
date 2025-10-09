@@ -6,16 +6,16 @@ This document provides comprehensive guidance for developing the backend systems
 
 ## Documentation Structure
 
-Detailed architecture and design documentation has been organized into separate files for better maintainability:
+**Read the relevant docs based on what you're implementing:**
 
-@docs/architecture.md
-@docs/design-patterns.md
-@docs/database-design.md
-@docs/temporal-workflows.md
-@docs/content-processing.md
-@docs/configuration.md
-@docs/testing-strategy.md
-@docs/operations.md
+- @docs/architecture.md - System layers, project structure, API/Service/Repository patterns
+- @docs/design-patterns.md - Repository pattern, dependency injection, error handling
+- @docs/database-design.md - SQLAlchemy models, schemas, ULID mixins, relationships
+- @docs/temporal-workflows.md - Workflows, activities, retries, fault tolerance
+- @docs/content-processing.md - RSS feeds, AI providers, similarity detection, summarization
+- @docs/configuration.md - Environment variables for all services (Database, Redis, AI, etc.)
+- @docs/testing-strategy.md - Test structure, fixtures, mocks, coverage targets
+- @docs/operations.md - Caching, monitoring, logging, security, performance
 
 ## Coding Guidelines
 

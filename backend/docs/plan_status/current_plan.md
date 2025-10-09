@@ -39,7 +39,7 @@ Based on the completed Phase 1+ MVP codebase, here's the current status and rema
   - Connected components algorithm for efficient grouping
   - Topic aggregation from all articles in groups - topics from Article.ai_topics field are merged and deduplicated
   - Redis caching layer with 24-hour TTL for similarity results
-  - Comprehensive test suite (21 tests) with mock AI provider
+  - Comprehensive test suite (22 tests) with mock AI provider
 - ✅ **Topic extraction service** (`topic_extractor.py`) - **COMPLETED** - AI-powered key topic identification for article categorization and relevance scoring
   - Uses AI provider abstraction for model flexibility
   - Extracts 3-5 key topics/themes from article content
@@ -48,13 +48,29 @@ Based on the completed Phase 1+ MVP codebase, here's the current status and rema
   - Graceful error handling with fallback to empty list
   - Article model enhanced with ai_topics field for storing extracted topics
   - Content truncation to 1000 characters for efficient token usage
-  - Comprehensive test suite (19 tests) with mock AI provider
-- **Content normalization** (`normalizer.py`) for standardizing article structure and metadata (planned)
+  - Comprehensive test suite (15 tests) with mock AI provider
+- ✅ **Content normalization** (`normalizer.py`) - **COMPLETED** - Business-level validation and metadata standardization for consistent article quality
+  - Content validation (minimum length, non-empty, whitespace handling)
+  - AI-powered spam detection with confidence scoring and reasoning
+  - Date normalization ensuring UTC-aware datetime handling
+  - Metadata standardization (title, author, tags, URL cleanup)
+  - Tracking parameter removal and HTTPS upgrade
+  - Smart content truncation at word boundaries
+  - Graceful error handling with fallback behavior
+  - Comprehensive test suite (30 tests) with mock AI provider
 - **Text processing utilities** (`utils/text_processing.py`) for content cleaning and extraction (planned)
 
 *Note: Basic content cleaning and text normalization is already implemented in RSS fetcher*
 
 ### 3. AI Integration Layer (Building on Provider Abstraction)
+- ✅ **Quality scorer** (`quality_scorer.py`) - **COMPLETED** - Hybrid quality assessment combining rule-based metadata scoring with AI-powered content quality analysis
+  - Rule-based metadata scoring (0-50 points): author, date, tags, content length
+  - AI-powered content quality assessment (0-50 points): writing quality, informativeness, credibility
+  - Structured output with ContentQualityResult Pydantic model
+  - Configurable quality scoring toggle via QUALITY_SCORING_ENABLED setting
+  - Graceful degradation to metadata-only scoring when AI disabled
+  - Quality scores stored in article.metadata for ranking and filtering
+  - Comprehensive test suite (4 tests) with mock AI provider
 - **PydanticAI summarizer** with configurable summary styles (brief, detailed, bullet points) - will use AI provider abstraction
 - **Relevance scorer** using keyword matching and semantic analysis against interest profiles - will use AI provider abstraction
 - **Content classifier** for categorizing articles by topic/type
@@ -87,9 +103,13 @@ Based on the completed Phase 1+ MVP codebase, here's the current status and rema
 
 ### 9. Testing Strategy
 - ✅ **RSS Feed Fetching Tests** - Complete test suite with 73 passing tests covering HTTP client, URL validation, RSS parsing, factory pattern, and error handling
-- ✅ **AI Provider & Similarity Tests** - Complete test suite with 21 passing tests using mock AI provider for deterministic results, including topic aggregation from grouped articles
-- ✅ **Topic Extraction Tests** - Complete test suite with 19 passing tests covering topic extraction, error handling, content validation, max topics enforcement, and content truncation
-- ✅ **Total Processor Tests** - ~149 comprehensive tests across all content processing components
+- ✅ **AI Provider & Similarity Tests** - Complete test suite with 22 passing tests using mock AI provider for deterministic results, including topic aggregation from grouped articles
+- ✅ **Topic Extraction Tests** - Complete test suite with 15 passing tests covering topic extraction, error handling, content validation, max topics enforcement, and content truncation
+- ✅ **Content Normalization Tests** - Complete test suite with 30 passing tests covering content validation, spam detection, date normalization, metadata standardization, and URL cleanup
+- ✅ **Quality Scoring Tests** - Complete test suite with 4 passing tests covering hybrid scoring, metadata scoring, AI quality assessment, and graceful degradation
+- ✅ **Cache & Utility Tests** - Test suite with 23 passing tests for Redis caching and utility functions
+- ✅ **Integration & Edge Case Tests** - 19 passing tests for integration scenarios and edge cases
+- ✅ **Total Processor Tests** - **170 comprehensive tests** across all content processing components
 - **Unit tests** for remaining AI processors (summarization, relevance scoring) - planned
 - **Integration tests** for end-to-end content processing pipeline - planned
 - **Temporal workflow tests** using the Temporal testing framework - planned
@@ -110,7 +130,7 @@ Based on the completed Phase 1+ MVP codebase, here's the current status and rema
 - Redis for caching and session management
 - Temporal server for workflow orchestration
 
-This plan builds directly on the existing Phase 1 foundation. **The RSS Feed Fetching Layer, AI Provider Abstraction, Similarity Detection Engine, and Topic Extraction Service have been completed**, providing comprehensive content acquisition and AI processing capabilities for Phase 2.
+This plan builds directly on the existing Phase 1 foundation. **The RSS Feed Fetching Layer, AI Provider Abstraction, Content Normalization, Quality Scoring, Similarity Detection Engine, and Topic Extraction Service have been completed**, providing comprehensive content acquisition, quality assessment, and AI processing capabilities for Phase 2.
 
 ## Recent Implementation Summary
 
@@ -210,6 +230,68 @@ This plan builds directly on the existing Phase 1 foundation. **The RSS Feed Fet
   - `test_detect_similar_articles_deduplicates_topics` - Ensures duplicate topics are removed
   - `test_single_article_empty_topics` - Verifies single-article groups handle empty topics correctly
 
+### ✅ Content Normalization - COMPLETED
+
+**Key Accomplishments:**
+- Business-level validation and metadata standardization for consistent article quality
+- AI-powered spam detection with confidence scoring and reasoning
+- Content validation (minimum length, non-empty content, whitespace handling)
+- Date normalization ensuring UTC-aware datetime handling (naive → UTC, timezone conversion)
+- Metadata standardization (title cleanup, author title case, tag deduplication)
+- URL normalization (tracking parameter removal, HTTPS upgrade)
+- Smart content truncation at word boundaries
+- Graceful error handling with fallback behavior (never raises exceptions)
+- **30 comprehensive test cases** covering all validation, normalization, and edge case scenarios
+
+**Implementation Details:**
+- `ContentNormalizer` class orchestrates validation and normalization process
+- Uses AI provider abstraction for spam detection
+- `SpamDetectionResult` model provides structured AI output with spam determination
+- System prompt guides AI to detect spam patterns while avoiding false positives
+- Multi-phase normalization: validation → date normalization → metadata standardization
+- Handles minimal/empty content gracefully (rejects during validation)
+- Content truncation to configurable max length (default: 50,000 chars)
+- **Article model updated:**
+  - Ensures published_at is always UTC-aware (never None or naive)
+  - Fallback to fetch_timestamp if published_at is missing
+  - Metadata fields standardized and cleaned
+
+**Configuration Settings:**
+- `CONTENT_MIN_LENGTH`: Minimum content length (default: 100 chars)
+- `CONTENT_MAX_LENGTH`: Maximum content length (default: 50,000 chars)
+- `SPAM_DETECTION_ENABLED`: Toggle spam detection (default: true)
+- `TITLE_MAX_LENGTH`: Maximum title length (default: 500 chars)
+- `AUTHOR_MAX_LENGTH`: Maximum author name length (default: 100 chars)
+- `TAG_MAX_LENGTH`: Maximum tag length (default: 50 chars)
+- `MAX_TAGS_PER_ARTICLE`: Maximum tags per article (default: 20)
+
+**Testing Approach:**
+- Unit tests using mock AI provider for deterministic spam detection
+- Edge case coverage: empty content, minimal content, unicode, emojis
+- Date normalization tests: naive datetime, non-UTC timezone, UTC preservation
+- Metadata normalization tests: title/author truncation, tag deduplication, URL cleanup
+- Spam detection tests: obvious spam, legitimate content, disabled spam detection
+- **Key test scenarios:**
+  - `test_normalize_valid_article` - Validates complete article normalization
+  - `test_normalize_content_too_short` - Rejects insufficient content
+  - `test_spam_detection_enabled` - AI spam detection works correctly
+  - `test_normalize_date_naive_datetime` - Naive datetime converted to UTC
+  - `test_normalize_tags_deduplication` - Tags deduplicated and lowercased
+  - `test_normalize_url_remove_tracking_params` - URL tracking params removed
+
+**Files Implemented:**
+- `app/processors/normalizer.py` - Content normalization service
+- `app/config.py` - Added normalization configuration settings
+- `tests/test_processors/test_normalizer.py` - Complete test suite (30 tests)
+
+**Integration with Content Pipeline:**
+- Called after RSS fetching, before quality scoring
+- Rejects low-quality/spam articles early in pipeline
+- Ensures consistent article structure for downstream processors
+- Provides clean, standardized data for AI processing
+
+**Next Phase Priority:** AI summarization service to complete Phase 2 content processing pipeline.
+
 ### ✅ Topic Extraction Service - COMPLETED
 
 **Key Accomplishments:**
@@ -221,7 +303,7 @@ This plan builds directly on the existing Phase 1 foundation. **The RSS Feed Fet
 - Graceful error handling with fallback to empty list on failures
 - Content length validation and truncation (1000 chars) to manage token limits
 - Article model enhanced with ai_topics field
-- **19 comprehensive test cases** covering all scenarios and edge cases
+- **15 comprehensive test cases** covering all scenarios and edge cases
 
 **Implementation Details:**
 - `TopicExtractor` class orchestrates topic extraction process
@@ -267,3 +349,69 @@ This plan builds directly on the existing Phase 1 foundation. **The RSS Feed Fet
 - Enables content categorization and filtering in digest generation
 
 **Next Phase Priority:** AI summarization service and relevance scoring to complete Phase 2 content processing pipeline.
+
+### ✅ Quality Scoring - COMPLETED
+
+**Key Accomplishments:**
+- Hybrid quality assessment combining rule-based metadata scoring with AI-powered content quality analysis
+- Rule-based metadata scoring (0-50 points) for objective completeness metrics
+- AI-powered content quality assessment (0-50 points) for subjective quality evaluation
+- Structured output using ContentQualityResult Pydantic model
+- Configurable quality scoring toggle via QUALITY_SCORING_ENABLED setting
+- Graceful degradation to metadata-only scoring when AI disabled
+- Quality scores stored in article.metadata for ranking and filtering
+- **4 comprehensive test cases** covering all scoring scenarios
+
+**Implementation Details:**
+- `QualityScorer` class orchestrates hybrid scoring process
+- Uses AI provider abstraction for content quality assessment
+- `ContentQualityResult` model provides structured AI output with quality dimensions
+- System prompt guides AI to assess writing quality, informativeness, and credibility
+- Two-component hybrid approach: metadata completeness + AI content quality
+- **Metadata Scoring (0-50 points):**
+  - Has author: +10 points
+  - Has published_at: +10 points
+  - Has tags (1+): +5 points
+  - Content > 500 chars: +15 points
+  - Content > 1000 chars: +10 bonus points
+- **AI Content Quality (0-50 points):**
+  - Writing quality (0-20): Clarity, coherence, grammar, structure
+  - Informativeness (0-20): Depth, coverage, value, insights
+  - Credibility (0-10): Evidence, balance, professionalism
+- **Final Score:** metadata_score + ai_content_score = 0-100 points
+- When AI disabled, metadata score scaled to 0-100 range
+- Handles AI errors gracefully with neutral fallback scores
+
+**Configuration Settings:**
+- `QUALITY_SCORING_ENABLED`: Toggle AI-powered quality assessment (default: true)
+
+**Testing Approach:**
+- Unit tests using mock AI provider for deterministic content quality results
+- Metadata scoring tests: validate rule-based scoring accuracy
+- Hybrid scoring tests: combined metadata + AI scoring
+- AI disabled tests: verify graceful degradation to metadata-only
+- **Key test scenarios:**
+  - `test_calculate_metadata_score_complete_article` - Full metadata scoring
+  - `test_calculate_metadata_score_minimal_article` - Minimal article scoring
+  - `test_hybrid_quality_scoring_enabled` - Combined scoring with AI
+  - `test_quality_scoring_disabled` - Metadata-only fallback
+
+**Files Implemented:**
+- `app/processors/quality_scorer.py` - Quality scoring service
+- `app/config.py` - Added QUALITY_SCORING_ENABLED setting
+- `backend/docs/quality_scorer.md` - Comprehensive module documentation
+- `tests/test_processors/test_quality_scorer.py` - Complete test suite (4 tests)
+
+**Integration with Content Pipeline:**
+- Called after content normalization, before topic extraction
+- Enables article ranking and prioritization in digest generation
+- Scores stored in article.metadata for downstream use
+- Supports future features like quality-based filtering
+
+**Why Hybrid Approach:**
+- Fast rule-based metrics for objective completeness
+- Deep AI analysis for subjective content quality
+- Balanced scoring resistant to manipulation
+- Graceful degradation when AI unavailable
+
+**Next Phase Priority:** AI summarization service to complete Phase 2 content processing pipeline.

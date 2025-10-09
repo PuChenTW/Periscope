@@ -157,7 +157,6 @@ The content digest generation is orchestrated as a Temporal workflow to handle:
 ## Related Documentation
 
 - @backend/CLAUDE.md: Backend architecture and Development Guide
-- @backend/docs/: Current plan and status
 - @frontend/CLAUDE.md: Frontend architecture and Development Guide
 
 ## Key Assumptions & Constraints
