@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # Topic Extraction Settings
     topic_extraction_max_topics: int = Field(5, env="TOPIC_EXTRACTION_MAX_TOPICS")
 
+    # Summarization Settings
+    summary_max_length: int = Field(500, env="SUMMARY_MAX_LENGTH")
+    summary_content_length: int = Field(2000, env="SUMMARY_CONTENT_LENGTH")
+
     # Content Normalization Settings
     content_min_length: int = Field(100, env="CONTENT_MIN_LENGTH")
     content_max_length: int = Field(50000, env="CONTENT_MAX_LENGTH")
