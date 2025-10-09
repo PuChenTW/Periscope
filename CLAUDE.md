@@ -172,4 +172,3 @@ The content digest generation is orchestrated as a Temporal workflow to handle:
 
 - Always check @backend/CLAUDE.md or @frontend/CLAUDE.md for development details.
 - Ensure every implemented feature directly advances the project goals. Do not build anything that lacks clear, measurable value or user impact.
-
