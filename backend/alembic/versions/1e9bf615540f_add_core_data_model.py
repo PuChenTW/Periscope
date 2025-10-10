@@ -73,7 +73,7 @@ def upgrade() -> None:
     sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.Column('id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('config_id', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-    sa.Column('keywords', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('keywords', sa.JSON(), nullable=True),
     sa.ForeignKeyConstraint(['config_id'], ['digest_configurations.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
