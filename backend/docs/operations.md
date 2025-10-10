@@ -53,13 +53,6 @@ Event-based invalidation triggered by configuration changes and data updates.
 - Interest profile changes → Clear relevance scoring cache
 - Manual cache clear via admin endpoint
 
-**Implementation:**
-```python
-async def invalidate_user_cache(user_id: str):
-    await redis.delete(f"config:user:{user_id}")
-    await redis.delete(f"profile:interest:{user_id}")
-```
-
 ## 2. Monitoring Points
 
 ### API Metrics
@@ -122,8 +115,8 @@ Track API call success rates and response times for external dependencies.
 - **External Service Availability**: Uptime monitoring
 
 **Alerting:**
-- Alert on success rate < 95%
-- Alert on response time > 5s
+- Alert on low success rates
+- Alert on high response times
 - Alert on consecutive failures
 
 ## 3. Logging Standards
@@ -193,21 +186,12 @@ Include user IDs and operation context for request tracing.
 - `correlation_id`: Cross-service request tracking
 - `duration_ms`: Operation duration
 
-**Example:**
-```python
-logger.bind(
-    request_id=request.id,
-    user_id=user.id,
-    operation="fetch_content"
-).info("Starting content fetch")
-```
-
 ## 4. Security Considerations
 
 ### Authentication & Authorization
 
 **JWT Tokens:**
-- Proper expiration (30 minutes for access, 7 days for refresh)
+- Proper expiration times
 - Secure signing with strong secret keys
 - Token refresh mechanism
 - Blacklist for revoked tokens
@@ -215,11 +199,11 @@ logger.bind(
 **Email Verification:**
 - Required before digest delivery
 - Unique verification tokens
-- Token expiration (24 hours)
+- Token expiration
 - Resend verification capability
 
 **Rate Limiting:**
-- Per-user rate limits (60 req/min)
+- Per-user rate limits
 - Burst allowance for legitimate traffic
 - IP-based rate limiting for unauthenticated requests
 - Progressive backoff on violations
@@ -234,7 +218,7 @@ logger.bind(
 
 **Password Security:**
 - Hash sensitive data using bcrypt
-- Minimum 12 rounds for bcrypt
+- Sufficient bcrypt rounds
 - Password complexity requirements
 - Prevent password reuse
 
@@ -251,7 +235,7 @@ logger.bind(
 
 **Communication Security:**
 - HTTPS-only communications
-- TLS 1.2 minimum
+- Modern TLS versions
 - Certificate validation
 - HSTS headers
 

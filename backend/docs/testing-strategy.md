@@ -120,22 +120,22 @@ Avoid hitting real APIs in tests, use mocks for external dependencies.
 - `responses` for HTTP mocking
 - Custom mock fixtures for AI providers
 
-### RSS Feed Processing Tests (73 tests)
-Comprehensive test suite covering simplified HTTP client, URL validation, RSS/Atom parsing, factory pattern, and unified error handling scenarios.
+### RSS Feed Processing Tests
+Comprehensive test suite covering HTTP client, URL validation, RSS/Atom parsing, factory pattern, and error handling scenarios.
 
 **Coverage Areas:**
-- Simplified HTTP client with native aiohttp exceptions
+- HTTP client with native aiohttp exceptions
 - URL validation (format, scheme, accessibility)
 - RSS 2.0 and Atom 1.0 parsing
 - Factory pattern fetcher selection
-- Unified error handling with fixed delay retry
+- Error handling with retry logic
 - Content extraction and cleaning
 - Metadata extraction
 - Timeout and network error scenarios
 - Malformed feed handling
 
 ### AI Provider Tests
-Mock AI provider interface for deterministic testing of similarity detection and topic extraction without calling real AI APIs.
+Mock AI provider interface for deterministic testing without calling real AI APIs.
 
 **Mocking Strategy:**
 - Protocol-based mock implementation
@@ -149,8 +149,8 @@ Mock AI provider interface for deterministic testing of similarity detection and
 - Structured output parsing
 - Error handling and fallbacks
 
-### Similarity Detection Tests (21 tests)
-Complete test suite with mock AI provider for grouping logic, topic aggregation, and caching behavior.
+### Similarity Detection Tests
+Test suite with mock AI provider for grouping logic, topic aggregation, and caching behavior.
 
 **Coverage Areas:**
 - Article pairwise comparison
@@ -160,40 +160,25 @@ Complete test suite with mock AI provider for grouping logic, topic aggregation,
 - Redis caching behavior
 - Error handling with fallback
 - Empty input handling
-- Edge cases (single article, no similarities)
+- Edge cases
 
-### Topic Extraction Tests (19 tests)
-Complete test suite covering topic extraction, error handling, content validation, and max topics enforcement.
+### Topic Extraction Tests
+Test suite covering topic extraction, error handling, content validation, and max topics enforcement.
 
 **Coverage Areas:**
 - Topic extraction from article content
-- Content truncation to 1000 characters
+- Content truncation handling
 - Max topics limit enforcement
 - Structured output validation
-- Error handling with empty list fallback
+- Error handling with fallback
 - Empty/invalid content handling
 - AI provider integration
 - Cache behavior
-
-### Total Test Coverage
-Approximately **149 comprehensive tests** across all content processing components.
 
 ## 3. Test Configuration Approach
 
 ### pytest-mock-resources
 Use pytest-mock-resources for PostgreSQL test fixtures with pgvector support.
-
-**Setup:**
-```python
-# conftest.py
-from pytest_mock_resources import create_postgres_fixture
-
-# Create PostgreSQL fixture with pgvector extension
-postgres = create_postgres_fixture(
-    extensions=["pgvector"],
-    engine_kwargs={"echo": False}
-)
-```
 
 **Benefits:**
 - Automatic database setup and teardown
@@ -212,17 +197,6 @@ Configure separate test databases per worker for parallel test execution.
 
 ### Session Management
 Implement proper session management with automatic cleanup and rollback on test failures.
-
-**Pattern:**
-```python
-@pytest.fixture
-def db_session(postgres):
-    """Provide a database session with automatic rollback."""
-    session = Session(postgres)
-    yield session
-    session.rollback()
-    session.close()
-```
 
 **Benefits:**
 - Test isolation
@@ -245,11 +219,11 @@ def db_session(postgres):
 
 ## Coverage Targets
 
-- **Overall Code Coverage**: >80%
-- **Critical Paths**: 100% (authentication, payment, data integrity)
-- **Business Logic**: >90%
-- **Utilities**: >70%
-- **Integration Points**: >85%
+- **Overall Code Coverage**: High coverage across all components
+- **Critical Paths**: Full coverage (authentication, data integrity)
+- **Business Logic**: Comprehensive coverage
+- **Utilities**: Good coverage
+- **Integration Points**: Strong coverage
 
 ## Continuous Integration
 
