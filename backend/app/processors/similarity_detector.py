@@ -178,12 +178,12 @@ class SimilarityDetector:
             similarity_score = result.output
 
             # Determine if articles are similar based on confidence threshold
-            is_similar = similarity_score.confidence >= self.settings.similarity_threshold
+            is_similar = similarity_score.confidence >= self.settings.similarity.threshold
 
             logger.debug(
                 f"Compared articles: '{article1.title[:50]}...' vs '{article2.title[:50]}...' "
                 f"-> Similar: {is_similar} (confidence: {similarity_score.confidence:.2f}, "
-                f"threshold: {self.settings.similarity_threshold:.2f})"
+                f"threshold: {self.settings.similarity.threshold:.2f})"
             )
 
             # Cache the result
@@ -299,7 +299,7 @@ class SimilarityDetector:
     async def _cache_similarity(self, cache_key: str, is_similar: bool) -> None:
         """Cache similarity result."""
         try:
-            ttl_seconds = self.settings.similarity_cache_ttl_minutes * 60
+            ttl_seconds = self.settings.similarity.cache_ttl_minutes * 60
             data = {"is_similar": is_similar}
             await self.cache.setex(cache_key, ttl_seconds, json.dumps(data))
         except Exception as e:

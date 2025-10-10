@@ -319,9 +319,10 @@ class TestAIPromptValidation:
     def mock_settings(self):
         """Create mock settings for AI validation."""
         settings = MagicMock()
-        settings.ai_prompt_validation_enabled = True
-        settings.ai_prompt_validation_threshold = 0.8
-        settings.ai_prompt_validation_cache_ttl_minutes = 1440
+        settings.ai_validation = MagicMock()
+        settings.ai_validation.enabled = True
+        settings.ai_validation.threshold = 0.8
+        settings.ai_validation.cache_ttl_minutes = 1440
         return settings
 
     @pytest.fixture
@@ -393,7 +394,7 @@ class TestAIPromptValidation:
     @pytest.mark.asyncio
     async def test_ai_validation_disabled(self, mock_settings, mock_ai_provider):
         """Test that AI validation can be disabled via settings."""
-        mock_settings.ai_prompt_validation_enabled = False
+        mock_settings.ai_validation.enabled = False
 
         is_safe, confidence, reasoning = await validate_prompt_with_ai(
             prompt="Any prompt",
@@ -534,11 +535,13 @@ class TestAsyncPromptValidation:
     def mock_settings(self):
         """Create mock settings."""
         settings = MagicMock()
-        settings.ai_prompt_validation_enabled = True
-        settings.ai_prompt_validation_threshold = 0.8
-        settings.ai_prompt_validation_cache_ttl_minutes = 1440
-        settings.custom_prompt_min_length = 10
-        settings.custom_prompt_max_length = 1000
+        settings.ai_validation = MagicMock()
+        settings.ai_validation.enabled = True
+        settings.ai_validation.threshold = 0.8
+        settings.ai_validation.cache_ttl_minutes = 1440
+        settings.custom_prompt = MagicMock()
+        settings.custom_prompt.min_length = 10
+        settings.custom_prompt.max_length = 1000
         return settings
 
     @pytest.fixture

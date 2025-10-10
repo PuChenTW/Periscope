@@ -52,7 +52,7 @@ class TopicExtractor:
                 "Your task is to identify the main subjects, themes, and categories that best "
                 "represent the article's content.\n\n"
                 "Guidelines:\n"
-                f"1. Extract {self.settings.topic_extraction_max_topics} or fewer distinct topics\n"
+                f"1. Extract {self.settings.topic_extraction.max_topics} or fewer distinct topics\n"
                 "2. Focus on specific, meaningful topics rather than generic categories\n"
                 "3. Use concise phrases (1-3 words per topic)\n"
                 "4. Prioritize topics that would help with content categorization and relevance matching\n"
@@ -85,7 +85,7 @@ class TopicExtractor:
             extraction_result = result.output
 
             # Enforce max topics limit
-            topics = extraction_result.topics[: self.settings.topic_extraction_max_topics]
+            topics = extraction_result.topics[: self.settings.topic_extraction.max_topics]
 
             logger.debug(f"Extracted topics for '{article.title[:50]}...': {topics} - {extraction_result.reasoning}")
 

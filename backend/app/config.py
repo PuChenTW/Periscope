@@ -1,76 +1,148 @@
 from functools import cache
 
-from pydantic import Field
+from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class DatabaseSettings(BaseModel):
+    """Database configuration."""
+
+    url: str
+
+
+class RedisSettings(BaseModel):
+    """Redis cache configuration."""
+
+    url: str = "redis://localhost:6379/0"
+    max_connections: int = 10
+
+
+class CacheSettings(BaseModel):
+    """General cache configuration."""
+
+    ttl_minutes: int = 60
+
+
+class EmailSettings(BaseModel):
+    """Email provider configuration."""
+
+    provider: str = "smtp"
+    api_key: str = ""
+    smtp_host: str = "localhost"
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+
+
+class AISettings(BaseModel):
+    """AI provider configuration."""
+
+    provider: str = "gemini"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash-lite"
+    openai_api_key: str = ""
+    openai_model: str = "gpt-5-nano"
+
+
+class RSSSettings(BaseModel):
+    """RSS fetcher configuration."""
+
+    fetch_timeout: int = 30
+    max_retries: int = 3
+    retry_delay: float = 1.0
+    max_articles_per_feed: int = 100
+    user_agent: str = "Periscope-Bot/1.0 (+https://periscope.ai/bot)"
+
+
+class SimilaritySettings(BaseModel):
+    """Similarity detection configuration."""
+
+    threshold: float = 0.7
+    cache_ttl_minutes: int = 1440
+    batch_size: int = 10
+
+
+class TopicExtractionSettings(BaseModel):
+    """Topic extraction configuration."""
+
+    max_topics: int = 5
+
+
+class SummarizationSettings(BaseModel):
+    """Summarization configuration."""
+
+    max_length: int = 500
+    content_length: int = 2000
+
+
+class CustomPromptSettings(BaseModel):
+    """Custom prompt validation configuration."""
+
+    max_length: int = 1000
+    min_length: int = 10
+    validation_enabled: bool = True
+
+
+class AIPromptValidationSettings(BaseModel):
+    """AI-powered prompt validation configuration (final guardrail layer)."""
+
+    enabled: bool = True
+    threshold: float = 0.8
+    cache_ttl_minutes: int = 1440
+
+
+class ContentNormalizationSettings(BaseModel):
+    """Content normalization and quality configuration."""
+
+    min_length: int = 100
+    max_length: int = 50000
+    spam_detection_enabled: bool = True
+    title_max_length: int = 500
+    author_max_length: int = 100
+    tag_max_length: int = 50
+    max_tags_per_article: int = 20
+    quality_scoring_enabled: bool = True
+
+
+class SecuritySettings(BaseModel):
+    """Security and authentication configuration."""
+
+    secret_key: str
+    jwt_expire_minutes: int = 30
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    """Main application settings with nested configuration groups.
+
+    Environment variables can be set using double underscore (__) as delimiter:
+    - DATABASE__URL for database.url
+    - AI__GEMINI_API_KEY for ai.gemini_api_key
+    - SIMILARITY__THRESHOLD for similarity.threshold
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_nested_delimiter="__",
+    )
 
     app_name: str = "Personal Daily Reading Digest"
-    debug: bool = Field(False, env="DEBUG")
+    debug: bool = False
 
-    database_url: str = Field(..., env="DATABASE_URL")
-
-    secret_key: str = Field(..., env="SECRET_KEY")
-    jwt_expire_minutes: int = Field(30, env="JWT_EXPIRE_MINUTES")
-
-    email_provider: str = Field("smtp", env="EMAIL_PROVIDER")
-    email_api_key: str = Field("", env="EMAIL_API_KEY")
-    smtp_host: str = Field("localhost", env="SMTP_HOST")
-    smtp_port: int = Field(587, env="SMTP_PORT")
-    smtp_username: str = Field("", env="SMTP_USERNAME")
-    smtp_password: str = Field("", env="SMTP_PASSWORD")
-
-    cache_ttl_minutes: int = Field(60, env="CACHE_TTL_MINUTES")
-    redis_url: str = Field("redis://localhost:6379/0", env="REDIS_URL")
-    redis_max_connections: int = Field(10, env="REDIS_MAX_CONNECTIONS")
-
-    # RSS Fetcher Settings
-    rss_fetch_timeout: int = Field(30, env="RSS_FETCH_TIMEOUT")
-    rss_max_retries: int = Field(3, env="RSS_MAX_RETRIES")
-    rss_retry_delay: float = Field(1.0, env="RSS_RETRY_DELAY")
-    rss_max_articles_per_feed: int = Field(100, env="RSS_MAX_ARTICLES_PER_FEED")
-    rss_user_agent: str = Field("Periscope-Bot/1.0 (+https://periscope.ai/bot)", env="RSS_USER_AGENT")
-
-    # AI Provider Settings
-    ai_provider: str = Field("gemini", env="AI_PROVIDER")
-    gemini_api_key: str = Field("", env="GEMINI_API_KEY")
-    gemini_model: str = Field("gemini-2.5-flash-lite", env="GEMINI_MODEL")
-    openai_api_key: str = Field("", env="OPENAI_API_KEY")
-    openai_model: str = Field("gpt-5-nano", env="OPENAI_MODEL")
-
-    # Similarity Detection Settings
-    similarity_threshold: float = Field(0.7, env="SIMILARITY_THRESHOLD")
-    similarity_cache_ttl_minutes: int = Field(1440, env="SIMILARITY_CACHE_TTL_MINUTES")
-    similarity_batch_size: int = Field(10, env="SIMILARITY_BATCH_SIZE")
-
-    # Topic Extraction Settings
-    topic_extraction_max_topics: int = Field(5, env="TOPIC_EXTRACTION_MAX_TOPICS")
-
-    # Summarization Settings
-    summary_max_length: int = Field(500, env="SUMMARY_MAX_LENGTH")
-    summary_content_length: int = Field(2000, env="SUMMARY_CONTENT_LENGTH")
-
-    # Custom Prompt Settings
-    custom_prompt_max_length: int = Field(1000, env="CUSTOM_PROMPT_MAX_LENGTH")
-    custom_prompt_min_length: int = Field(10, env="CUSTOM_PROMPT_MIN_LENGTH")
-    custom_prompt_validation_enabled: bool = Field(True, env="CUSTOM_PROMPT_VALIDATION_ENABLED")
-
-    # AI Prompt Validation Settings (Final Guardrail Layer)
-    ai_prompt_validation_enabled: bool = Field(True, env="AI_PROMPT_VALIDATION_ENABLED")
-    ai_prompt_validation_threshold: float = Field(0.8, env="AI_PROMPT_VALIDATION_THRESHOLD")
-    ai_prompt_validation_cache_ttl_minutes: int = Field(1440, env="AI_PROMPT_VALIDATION_CACHE_TTL_MINUTES")
-
-    # Content Normalization Settings
-    content_min_length: int = Field(100, env="CONTENT_MIN_LENGTH")
-    content_max_length: int = Field(50000, env="CONTENT_MAX_LENGTH")
-    spam_detection_enabled: bool = Field(True, env="SPAM_DETECTION_ENABLED")
-    title_max_length: int = Field(500, env="TITLE_MAX_LENGTH")
-    author_max_length: int = Field(100, env="AUTHOR_MAX_LENGTH")
-    tag_max_length: int = Field(50, env="TAG_MAX_LENGTH")
-    max_tags_per_article: int = Field(20, env="MAX_TAGS_PER_ARTICLE")
-    quality_scoring_enabled: bool = Field(True, env="QUALITY_SCORING_ENABLED")
+    # Nested configuration groups
+    database: DatabaseSettings
+    redis: RedisSettings = RedisSettings()
+    cache: CacheSettings = CacheSettings()
+    email: EmailSettings = EmailSettings()
+    ai: AISettings = AISettings()
+    rss: RSSSettings = RSSSettings()
+    similarity: SimilaritySettings = SimilaritySettings()
+    topic_extraction: TopicExtractionSettings = TopicExtractionSettings()
+    summarization: SummarizationSettings = SummarizationSettings()
+    custom_prompt: CustomPromptSettings = CustomPromptSettings()
+    ai_validation: AIPromptValidationSettings = AIPromptValidationSettings()
+    content: ContentNormalizationSettings = ContentNormalizationSettings()
+    security: SecuritySettings
 
 
 @cache

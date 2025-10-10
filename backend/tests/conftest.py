@@ -40,11 +40,14 @@ def database_url(pmr_postgres_config):
 def override_environment(database_url):
     original_environ = copy.deepcopy(os.environ)
 
+    # Application settings
     os.environ["DEBUG"] = "true"
-    os.environ["DATABASE_URL"] = database_url
-    os.environ["SECRET_KEY"] = "test-secret-key"
-    os.environ["GEMINI_API_KEY"] = "test-api-key"
-    os.environ["OPENAI_API_KEY"] = "test-api-key"
+
+    # Nested configuration using __ delimiter
+    os.environ["DATABASE__URL"] = database_url
+    os.environ["SECURITY__SECRET_KEY"] = "test-secret-key"
+    os.environ["AI__GEMINI_API_KEY"] = "test-api-key"
+    os.environ["AI__OPENAI_API_KEY"] = "test-api-key"
 
     yield
 

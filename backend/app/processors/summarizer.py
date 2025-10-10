@@ -89,15 +89,15 @@ class Summarizer:
         if not prompt:
             return None
 
-        if not self.settings.custom_prompt_validation_enabled:
+        if not self.settings.custom_prompt.validation_enabled:
             logger.warning("Custom prompt validation is disabled - using prompt as-is")
             return sanitize_prompt(prompt)
 
         # Layer 1: Pattern-based validation
         is_valid, error_message = validate_summary_prompt(
             prompt,
-            min_length=self.settings.custom_prompt_min_length,
-            max_length=self.settings.custom_prompt_max_length,
+            min_length=self.settings.custom_prompt.min_length,
+            max_length=self.settings.custom_prompt.max_length,
         )
 
         if not is_valid:
@@ -105,7 +105,7 @@ class Summarizer:
             return None
 
         # Layer 2: AI-powered validation (optional)
-        if self.settings.ai_prompt_validation_enabled:
+        if self.settings.ai_validation.enabled:
             ai_is_safe, confidence, reasoning = await validate_prompt_with_ai(
                 prompt=prompt,
                 settings=self.settings,
@@ -143,20 +143,20 @@ class Summarizer:
 
         style_guidelines = {
             "brief": textwrap.dedent(f"""\
-                Summary Style: Brief (1-2 paragraphs, max {self.settings.summary_max_length} words)
+                Summary Style: Brief (1-2 paragraphs, max {self.settings.summarization.max_length} words)
                 - Focus on the core message
                 - Keep it concise and to the point
                 - Use simple, clear sentences
             """),
             "detailed": textwrap.dedent(f"""\
-                Summary Style: Detailed (3-4 paragraphs, max {self.settings.summary_max_length} words)
+                Summary Style: Detailed (3-4 paragraphs, max {self.settings.summarization.max_length} words)
                 - Provide comprehensive overview
                 - Include important context and background
                 - Cover multiple aspects of the topic
                 - Explain technical terms if needed
             """),
             "bullet_points": textwrap.dedent(f"""\
-                Summary Style: Bullet Points (max {self.settings.summary_max_length} words total)
+                Summary Style: Bullet Points (max {self.settings.summarization.max_length} words total)
                 - Create a list of key points
                 - Each point should be clear and self-contained
                 - Use concise, action-oriented language
@@ -244,7 +244,7 @@ class Summarizer:
         """Build prompt for AI summarization."""
         # Truncate content to avoid token limits
         # Use configurable content length for summarization
-        content = article.content[: self.settings.summary_content_length] if article.content else ""
+        content = article.content[: self.settings.summarization.content_length] if article.content else ""
 
         # Include tags for additional context
         tags_str = ", ".join(article.tags) if article.tags else "None"

@@ -178,4 +178,4 @@ async def get_cache() -> CacheProtocol:
     except Exception as e:
         logger.warning(f"Failed to create Redis cache: {e}. Falling back to MemoryCache.")
         settings = get_settings()
-        return MemoryCache(default_ttl=settings.cache_ttl_minutes * 60)
+        return MemoryCache(default_ttl=settings.cache.ttl_minutes * 60)

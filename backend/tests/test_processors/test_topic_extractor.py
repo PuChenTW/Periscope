@@ -127,7 +127,7 @@ class TestTopicExtractor:
             topics = await topic_extractor.extract_topics(sample_articles[0])
 
             # Should only return first 5 topics (max limit)
-            assert len(topics) <= topic_extractor.settings.topic_extraction_max_topics
+            assert len(topics) <= topic_extractor.settings.topic_extraction.max_topics
             assert len(topics) == 5
 
     @pytest.mark.asyncio
@@ -258,11 +258,11 @@ class TestTopicExtractor:
     async def test_custom_max_topics_setting(self, mock_ai_provider, sample_articles):
         """Test that custom max_topics setting is respected."""
 
-        # Create settings with custom max topics
+        # Create settings with custom max topics using nested structure
         custom_settings = Settings(
-            database_url="postgresql://test",
-            secret_key="test-secret",
-            topic_extraction_max_topics=3,  # Custom limit
+            database={"url": "postgresql://test"},
+            security={"secret_key": "test-secret"},
+            topic_extraction={"max_topics": 3},  # Custom limit
         )
 
         extractor = TopicExtractor(settings=custom_settings, ai_provider=mock_ai_provider)

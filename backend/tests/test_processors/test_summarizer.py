@@ -10,7 +10,13 @@ from pydantic import HttpUrl
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
-from app.config import Settings
+from app.config import (
+    CustomPromptSettings,
+    DatabaseSettings,
+    SecuritySettings,
+    Settings,
+    SummarizationSettings,
+)
 from app.processors.fetchers.base import Article
 from app.processors.summarizer import Summarizer, SummaryResult
 
@@ -354,9 +360,9 @@ class TestSummarizer:
         """Test that custom summary length setting is respected in system prompt."""
         # Create settings with custom summary length
         custom_settings = Settings(
-            database_url="postgresql://test",
-            secret_key="test-secret",
-            summary_max_length=300,  # Custom limit
+            database=DatabaseSettings(url="postgresql://test"),
+            security=SecuritySettings(secret_key="test-secret"),
+            summarization=SummarizationSettings(max_length=300),  # Custom limit
         )
 
         summarizer = Summarizer(settings=custom_settings, ai_provider=mock_ai_provider, summary_style="brief")
@@ -518,9 +524,9 @@ class TestSummarizerCustomPrompts:
         """Test that when validation is disabled, prompts are used as-is."""
         # Create settings with validation disabled
         custom_settings = Settings(
-            database_url="postgresql://test",
-            secret_key="test-secret",
-            custom_prompt_validation_enabled=False,
+            database=DatabaseSettings(url="postgresql://test"),
+            security=SecuritySettings(secret_key="test-secret"),
+            custom_prompt=CustomPromptSettings(validation_enabled=False),
         )
 
         # Even an invalid-looking prompt should be accepted

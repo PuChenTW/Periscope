@@ -17,12 +17,12 @@ from app.config import get_settings
 def get_redis_pool() -> ConnectionPool:
     """Get the Redis connection pool"""
     settings = get_settings()
-    return ConnectionPool.from_url(url=settings.redis_url, decode_responses=True)
+    return ConnectionPool.from_url(url=settings.redis.url, decode_responses=True)
 
 
 @cache
 def get_redis_client() -> Redis:
     """Get the Redis client"""
     settings = get_settings()
-    client = Redis(connection_pool=get_redis_pool(), max_connections=settings.redis_max_connections)
+    client = Redis(connection_pool=get_redis_pool(), max_connections=settings.redis.max_connections)
     return client

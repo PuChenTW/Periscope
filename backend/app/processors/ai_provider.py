@@ -44,8 +44,8 @@ class GeminiProvider:
         Args:
             settings: Application settings containing Gemini configuration
         """
-        provider = GoogleProvider(api_key=settings.gemini_api_key)
-        self.model = GoogleModel(settings.gemini_model, provider=provider)
+        provider = GoogleProvider(api_key=settings.ai.gemini_api_key)
+        self.model = GoogleModel(settings.ai.gemini_model, provider=provider)
 
     def create_agent(self, output_type: type, system_prompt: str) -> Agent:
         """
@@ -75,8 +75,8 @@ class OpenAIProvider:
         Args:
             settings: Application settings containing OpenAI configuration
         """
-        provider = PydanticOpenAIProvider(api_key=settings.openai_api_key)
-        model = OpenAIChatModel(settings.openai_model, provider=provider)
+        provider = PydanticOpenAIProvider(api_key=settings.ai.openai_api_key)
+        model = OpenAIChatModel(settings.ai.openai_model, provider=provider)
         self.model = model
 
     def create_agent(self, output_type: type, system_prompt: str) -> Agent:
@@ -110,7 +110,7 @@ def create_ai_provider(settings: Settings) -> AIProvider:
     Raises:
         ValueError: If the configured AI provider is not supported
     """
-    provider = settings.ai_provider.lower()
+    provider = settings.ai.provider.lower()
 
     if provider == "gemini":
         return GeminiProvider(settings)

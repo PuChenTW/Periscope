@@ -10,7 +10,7 @@ from app.config import get_settings
 def create_engine_and_session():
     """Create the async engine and session maker."""
     settings = get_settings()
-    engine = create_async_engine(settings.database_url, echo=settings.debug, future=True)
+    engine = create_async_engine(settings.database.url, echo=settings.debug, future=True)
 
     async_session = async_sessionmaker(
         bind=engine,

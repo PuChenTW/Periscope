@@ -108,7 +108,7 @@ async def validate_prompt_with_ai(
         - reasoning: AI's explanation of the decision
     """
     # Check if AI validation is enabled
-    if not settings.ai_prompt_validation_enabled:
+    if not settings.ai_validation.enabled:
         logger.debug("AI prompt validation is disabled - skipping AI check")
         return True, 1.0, "AI validation disabled"
 
@@ -141,7 +141,7 @@ async def validate_prompt_with_ai(
         safety_result = result.output
 
         # Check if confidence meets threshold
-        is_safe = safety_result.is_safe and safety_result.confidence_score >= settings.ai_prompt_validation_threshold
+        is_safe = safety_result.is_safe and safety_result.confidence_score >= settings.ai_validation.threshold
 
         # Cache the result if cache client available
         if cache_client:
@@ -152,7 +152,7 @@ async def validate_prompt_with_ai(
                     "reasoning": safety_result.reasoning,
                     "potential_threats": safety_result.potential_threats,
                 }
-                ttl_seconds = settings.ai_prompt_validation_cache_ttl_minutes * 60
+                ttl_seconds = settings.ai_validation.cache_ttl_minutes * 60
                 await cache_client.setex(cache_key, ttl_seconds, json.dumps(cache_data))
             except Exception as e:
                 logger.warning(f"Failed to cache AI validation result: {e}")
