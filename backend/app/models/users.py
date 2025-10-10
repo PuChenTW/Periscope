@@ -1,7 +1,6 @@
 from datetime import datetime, time
 
-from sqlalchemy import JSON
-from sqlmodel import Column, Field, Relationship, SQLModel
+from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
 from app.models.base import ActiveLifecycleTimestampMixin, ULIDMixedIn
 
@@ -56,6 +55,8 @@ class InterestProfile(SQLModel, ULIDMixedIn, ActiveLifecycleTimestampMixin, tabl
 
     config_id: str = Field(foreign_key="digest_configurations.id", index=True)
     keywords: list[str] = Field(sa_column=Column(JSON), default=[])
+    relevance_threshold: int = Field(default=40, ge=0, le=100)
+    boost_factor: float = Field(default=1.0, ge=0.5, le=2.0)
 
     config: DigestConfiguration | None = Relationship(back_populates="interest_profile")
 

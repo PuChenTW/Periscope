@@ -82,13 +82,13 @@ User-configured RSS feeds and blog URLs with validation status.
 Keyword-based personalization with relevance scoring.
 
 **Key Fields:**
-- `user_id` (FK): One-to-one with User
-- `keywords`: Array of interest keywords (max 50)
-- `relevance_threshold`: Minimum score for content inclusion
-- `prioritize_matches`: Boost matching content in digest
+- `config_id` (FK): One-to-one with DigestConfiguration
+- `keywords`: JSON array of normalized interest keywords (max 50)
+- `relevance_threshold`: Minimum score for content inclusion (0-100, default 40)
+- `boost_factor`: Multiplier applied to final relevance score (range 0.5-2.0, default 1.0)
 
 **Relationships:**
-- One-to-one with User
+- One-to-one with DigestConfiguration
 
 ## Indexing Strategy
 

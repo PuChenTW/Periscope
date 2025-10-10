@@ -22,7 +22,7 @@ restart:  ## Restart all services
 	docker compose restart
 
 test:  ## Run pytest test suite
-	uv run pytest tests/ -v -n auto
+	uv run pytest tests/ -n auto
 
 test-cov:  ## Run tests with coverage report
 	uv run pytest --cov=./app tests/ -n auto

@@ -104,6 +104,19 @@ class ContentNormalizationSettings(BaseModel):
     quality_scoring_enabled: bool = True
 
 
+class PersonalizationSettings(BaseModel):
+    """Personalization and relevance scoring configuration."""
+
+    keyword_weight_title: int = 3
+    keyword_weight_content: int = 2
+    keyword_weight_tags: int = 4
+    max_keywords: int = 50
+    relevance_threshold_default: int = 40
+    boost_factor_default: float = 1.0
+    cache_ttl_minutes: int = 720
+    enable_semantic_scoring: bool = True
+
+
 class SecuritySettings(BaseModel):
     """Security and authentication configuration."""
 
@@ -142,6 +155,7 @@ class Settings(BaseSettings):
     custom_prompt: CustomPromptSettings = CustomPromptSettings()
     ai_validation: AIPromptValidationSettings = AIPromptValidationSettings()
     content: ContentNormalizationSettings = ContentNormalizationSettings()
+    personalization: PersonalizationSettings = PersonalizationSettings()
     security: SecuritySettings
 
 

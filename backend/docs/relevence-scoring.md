@@ -49,7 +49,7 @@
 
 - **Constructor** takes optional `PersonalizationSettings`, injected `AIProvider`, and a callable that fetches the user profile (for reuse in tests).
 - **Public coroutine** `score_article(article, profile)` mutates the article metadata in place and returns the article.
-- **Helpers** stay private pure functions (`_parse_keywords`, `_build_keyword_index`, `_score_keyword_matches`, `_should_run_ai`, `_build_semantic_prompt`, `_apply_temporal_quality_boost`).
+- **Helpers** stay private pure functions (`_build_keyword_index`, `_score_keyword_matches`, `_should_run_ai`, `_build_semantic_prompt`, `_apply_temporal_quality_boost`), with keyword normalization handled by `normalize_term_list()`.
 - **Pydantic Models**
     - `SemanticRelevanceResult` with `semantic_score`, `matched_interests`, `reasoning`, `confidence`.
     - `RelevanceBreakdown` to serialize keyword hits, semantic info, boosts, threshold.
@@ -75,7 +75,7 @@ All planned implementation steps have been completed:
 2. **Data preparation** ✅ COMPLETED
 
    - Extended `InterestProfile` model in `app/models/users.py` to store `relevance_threshold` (int) and `boost_factor` (float, default 1.0).
-   - Implemented parser helper `parse_keywords()` in `app/services/personalization.py` for keyword normalization.
+   - Implemented parser helper `normalize_term_list()` in `app/utils/text_processing.py` for keyword normalization.
 
 3. **Processor** ✅ COMPLETED
 
