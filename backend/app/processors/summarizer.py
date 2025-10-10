@@ -11,7 +11,7 @@ import textwrap
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from app.config import Settings, get_settings
+from app.config import AIPromptValidationSettings, CustomPromptSettings, SummarizationSettings, get_settings
 from app.processors.ai_provider import AIProvider, create_ai_provider
 from app.processors.fetchers.base import Article
 from app.utils.prompt_validator import sanitize_prompt, validate_prompt_with_ai, validate_summary_prompt
@@ -36,7 +36,9 @@ class Summarizer:
 
     def __init__(
         self,
-        settings: Settings | None = None,
+        summarization_settings: SummarizationSettings | None = None,
+        custom_prompt_settings: CustomPromptSettings | None = None,
+        ai_validation_settings: AIPromptValidationSettings | None = None,
         ai_provider: AIProvider | None = None,
         summary_style: str = "brief",
         custom_prompt: str | None = None,
@@ -45,16 +47,20 @@ class Summarizer:
         Initialize the summarizer with PydanticAI agent.
 
         Args:
-            settings: Application settings (uses get_settings() if not provided)
+            summarization_settings: Summarization settings (uses get_settings().summarization if not provided)
+            custom_prompt_settings: Custom prompt settings (uses get_settings().custom_prompt if not provided)
+            ai_validation_settings: AI validation settings (uses get_settings().ai_validation if not provided)
             ai_provider: AI provider instance (creates from settings if not provided)
             summary_style: Summary style - "brief", "detailed", or "bullet_points" (default: "brief")
             custom_prompt: Optional user-defined custom prompt (validated for safety)
         """
-        self.settings = settings or get_settings()
+        self.summarization_settings = summarization_settings or get_settings().summarization
+        self.custom_prompt_settings = custom_prompt_settings or get_settings().custom_prompt
+        self.ai_validation_settings = ai_validation_settings or get_settings().ai_validation
         self.summary_style = summary_style
 
         # Store provider + raw prompt for lazy initialization
-        self.ai_provider = ai_provider or create_ai_provider(self.settings)
+        self.ai_provider = ai_provider or create_ai_provider(get_settings())
         self._raw_custom_prompt = custom_prompt
 
         self.custom_prompt: str | None = None
@@ -89,15 +95,15 @@ class Summarizer:
         if not prompt:
             return None
 
-        if not self.settings.custom_prompt.validation_enabled:
+        if not self.custom_prompt_settings.validation_enabled:
             logger.warning("Custom prompt validation is disabled - using prompt as-is")
             return sanitize_prompt(prompt)
 
         # Layer 1: Pattern-based validation
         is_valid, error_message = validate_summary_prompt(
             prompt,
-            min_length=self.settings.custom_prompt.min_length,
-            max_length=self.settings.custom_prompt.max_length,
+            min_length=self.custom_prompt_settings.min_length,
+            max_length=self.custom_prompt_settings.max_length,
         )
 
         if not is_valid:
@@ -105,10 +111,10 @@ class Summarizer:
             return None
 
         # Layer 2: AI-powered validation (optional)
-        if self.settings.ai_validation.enabled:
+        if self.ai_validation_settings.enabled:
             ai_is_safe, confidence, reasoning = await validate_prompt_with_ai(
                 prompt=prompt,
-                settings=self.settings,
+                ai_validation_settings=self.ai_validation_settings,
                 ai_provider=self.ai_provider,
             )
 
@@ -143,20 +149,20 @@ class Summarizer:
 
         style_guidelines = {
             "brief": textwrap.dedent(f"""\
-                Summary Style: Brief (1-2 paragraphs, max {self.settings.summarization.max_length} words)
+                Summary Style: Brief (1-2 paragraphs, max {self.summarization_settings.max_length} words)
                 - Focus on the core message
                 - Keep it concise and to the point
                 - Use simple, clear sentences
             """),
             "detailed": textwrap.dedent(f"""\
-                Summary Style: Detailed (3-4 paragraphs, max {self.settings.summarization.max_length} words)
+                Summary Style: Detailed (3-4 paragraphs, max {self.summarization_settings.max_length} words)
                 - Provide comprehensive overview
                 - Include important context and background
                 - Cover multiple aspects of the topic
                 - Explain technical terms if needed
             """),
             "bullet_points": textwrap.dedent(f"""\
-                Summary Style: Bullet Points (max {self.settings.summarization.max_length} words total)
+                Summary Style: Bullet Points (max {self.summarization_settings.max_length} words total)
                 - Create a list of key points
                 - Each point should be clear and self-contained
                 - Use concise, action-oriented language
@@ -244,7 +250,7 @@ class Summarizer:
         """Build prompt for AI summarization."""
         # Truncate content to avoid token limits
         # Use configurable content length for summarization
-        content = article.content[: self.settings.summarization.content_length] if article.content else ""
+        content = article.content[: self.summarization_settings.content_length] if article.content else ""
 
         # Include tags for additional context
         tags_str = ", ".join(article.tags) if article.tags else "None"

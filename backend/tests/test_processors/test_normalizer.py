@@ -10,6 +10,7 @@ from pydantic import HttpUrl
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
+from app.config import ContentNormalizationSettings
 from app.processors.fetchers.base import Article
 from app.processors.normalizer import ContentNormalizer, SpamDetectionResult
 
@@ -40,12 +41,15 @@ class TestContentNormalizer:
     @pytest.fixture
     def normalizer(self, mock_ai_provider):
         """Create ContentNormalizer instance for testing with default settings."""
-        return ContentNormalizer(ai_provider=mock_ai_provider, content_min_length=50)
+        return ContentNormalizer(ai_provider=mock_ai_provider, settings=ContentNormalizationSettings(min_length=50))
 
     @pytest.fixture
     def normalizer_no_spam(self, mock_ai_provider):
         """Create ContentNormalizer with spam detection disabled."""
-        return ContentNormalizer(ai_provider=mock_ai_provider, content_min_length=50, spam_detection_enabled=False)
+        return ContentNormalizer(
+            ai_provider=mock_ai_provider,
+            settings=ContentNormalizationSettings(min_length=50, spam_detection_enabled=False),
+        )
 
     @pytest.fixture
     def valid_article(self):
@@ -283,7 +287,10 @@ class TestContentNormalizer:
     async def test_normalize_title_truncation(self, mock_ai_provider):
         """Test title truncation at word boundary."""
         # Need custom title_max_length, so create a specific normalizer
-        normalizer = ContentNormalizer(title_max_length=50, ai_provider=mock_ai_provider, content_min_length=50)
+        normalizer = ContentNormalizer(
+            settings=ContentNormalizationSettings(title_max_length=50, min_length=50),
+            ai_provider=mock_ai_provider,
+        )
 
         long_title = "This is a very long title that definitely exceeds fifty characters and should be truncated"
 
@@ -338,7 +345,9 @@ class TestContentNormalizer:
     async def test_normalize_author_truncation(self, mock_ai_provider):
         """Test author name truncation."""
         # Need custom author_max_length, so create a specific normalizer
-        normalizer = ContentNormalizer(author_max_length=30, ai_provider=mock_ai_provider, content_min_length=50)
+        normalizer = ContentNormalizer(
+            ai_provider=mock_ai_provider, settings=ContentNormalizationSettings(author_max_length=30, min_length=50)
+        )
 
         long_author = "Dr. Johnathan Christopher Alexander Davidson III"
 
@@ -382,7 +391,10 @@ class TestContentNormalizer:
     async def test_normalize_tags_max_limit(self, mock_ai_provider):
         """Test max tags per article limit."""
         # Need custom max_tags_per_article, so create a specific normalizer
-        normalizer = ContentNormalizer(max_tags_per_article=5, ai_provider=mock_ai_provider, content_min_length=50)
+        normalizer = ContentNormalizer(
+            ai_provider=mock_ai_provider,
+            settings=ContentNormalizationSettings(min_length=50, max_tags_per_article=5),
+        )
 
         tags = [f"tag{i}" for i in range(25)]  # 25 tags
 
@@ -403,7 +415,9 @@ class TestContentNormalizer:
     async def test_normalize_tags_length_limit(self, mock_ai_provider):
         """Test individual tag length limit."""
         # Need custom tag_max_length, so create a specific normalizer
-        normalizer = ContentNormalizer(tag_max_length=20, ai_provider=mock_ai_provider, content_min_length=50)
+        normalizer = ContentNormalizer(
+            ai_provider=mock_ai_provider, settings=ContentNormalizationSettings(tag_max_length=20, min_length=50)
+        )
 
         long_tag = "this-is-a-very-long-tag-that-exceeds-limit"
 
@@ -461,7 +475,9 @@ class TestContentNormalizer:
     async def test_enforce_content_length_truncation(self, mock_ai_provider):
         """Test content truncation at word boundary."""
         # Need custom content_max_length, so create a specific normalizer
-        normalizer = ContentNormalizer(content_max_length=200, ai_provider=mock_ai_provider)
+        normalizer = ContentNormalizer(
+            ai_provider=mock_ai_provider, settings=ContentNormalizationSettings(max_length=200)
+        )
 
         long_content = "This is a test article with very long content. " * 20  # Much longer than 200 chars
 

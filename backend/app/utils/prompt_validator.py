@@ -17,7 +17,7 @@ import textwrap
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from app.config import Settings
+from app.config import AIPromptValidationSettings
 from app.processors.ai_provider import AIProvider
 from app.utils.prompt_patterns import BLOCKLIST_PATTERNS, INJECTION_PATTERNS
 
@@ -84,7 +84,7 @@ def _build_ai_validation_system_prompt() -> str:
 
 async def validate_prompt_with_ai(
     prompt: str,
-    settings: Settings,
+    ai_validation_settings: AIPromptValidationSettings,
     ai_provider: AIProvider,
     cache_client=None,
 ) -> tuple[bool, float, str]:
@@ -97,7 +97,7 @@ async def validate_prompt_with_ai(
 
     Args:
         prompt: User-provided custom prompt to evaluate
-        settings: Application settings for configuration
+        ai_validation_settings: AI validation settings for configuration
         ai_provider: AI provider instance for validation
         cache_client: Optional Redis cache client for caching results
 
@@ -108,7 +108,7 @@ async def validate_prompt_with_ai(
         - reasoning: AI's explanation of the decision
     """
     # Check if AI validation is enabled
-    if not settings.ai_validation.enabled:
+    if not ai_validation_settings.enabled:
         logger.debug("AI prompt validation is disabled - skipping AI check")
         return True, 1.0, "AI validation disabled"
 
@@ -141,7 +141,7 @@ async def validate_prompt_with_ai(
         safety_result = result.output
 
         # Check if confidence meets threshold
-        is_safe = safety_result.is_safe and safety_result.confidence_score >= settings.ai_validation.threshold
+        is_safe = safety_result.is_safe and safety_result.confidence_score >= ai_validation_settings.threshold
 
         # Cache the result if cache client available
         if cache_client:
@@ -152,7 +152,7 @@ async def validate_prompt_with_ai(
                     "reasoning": safety_result.reasoning,
                     "potential_threats": safety_result.potential_threats,
                 }
-                ttl_seconds = settings.ai_validation.cache_ttl_minutes * 60
+                ttl_seconds = ai_validation_settings.cache_ttl_minutes * 60
                 await cache_client.setex(cache_key, ttl_seconds, json.dumps(cache_data))
             except Exception as e:
                 logger.warning(f"Failed to cache AI validation result: {e}")
@@ -182,7 +182,7 @@ async def validate_prompt_with_ai(
 
 async def validate_summary_prompt_async(
     prompt: str,
-    settings: Settings,
+    ai_validation_settings: AIPromptValidationSettings,
     ai_provider: AIProvider,
     cache_client=None,
     min_length: int = 10,
@@ -208,7 +208,7 @@ async def validate_summary_prompt_async(
 
     Args:
         prompt: User-provided custom prompt to validate
-        settings: Application settings for configuration
+        ai_validation_settings: AI validation settings for configuration
         ai_provider: AI provider instance for validation
         cache_client: Optional Redis cache client for caching AI results
         min_length: Minimum allowed prompt length (default: 10)
@@ -244,7 +244,7 @@ async def validate_summary_prompt_async(
     # Layer 2: AI-powered validation (final guardrail)
     ai_is_safe, confidence, ai_reasoning = await validate_prompt_with_ai(
         prompt=prompt,
-        settings=settings,
+        ai_validation_settings=ai_validation_settings,
         ai_provider=ai_provider,
         cache_client=cache_client,
     )

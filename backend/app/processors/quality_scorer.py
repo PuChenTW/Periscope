@@ -10,7 +10,7 @@ import textwrap
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from app.config import get_settings
+from app.config import ContentNormalizationSettings, get_settings
 from app.processors.ai_provider import AIProvider, create_ai_provider
 from app.processors.fetchers.base import Article
 
@@ -35,21 +35,21 @@ class QualityScorer:
 
     def __init__(
         self,
-        quality_scoring_enabled: bool = True,
+        settings: ContentNormalizationSettings | None = None,
         ai_provider: AIProvider | None = None,
     ):
         """
         Initialize quality scorer with configuration and AI provider.
 
         Args:
-            quality_scoring_enabled: Enable AI-powered quality assessment (default: True)
+            settings: Content normalization settings (uses get_settings().content if not provided)
             ai_provider: AI provider instance (creates default if not provided)
         """
-        self.quality_scoring_enabled = quality_scoring_enabled
+        self.settings = settings or get_settings().content
+        self.quality_scoring_enabled = self.settings.quality_scoring_enabled
 
         # Create AI provider if not injected
-        settings = get_settings()
-        provider = ai_provider or create_ai_provider(settings)
+        provider = ai_provider or create_ai_provider(get_settings())
 
         # Initialize PydanticAI agent for quality assessment
         self.quality_agent = provider.create_agent(

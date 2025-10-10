@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from app.config import get_settings
+from app.config import ContentNormalizationSettings, get_settings
 from app.processors.ai_provider import AIProvider, create_ai_provider
 from app.processors.fetchers.base import Article
 
@@ -36,39 +36,29 @@ class ContentNormalizer:
 
     def __init__(
         self,
-        content_min_length: int = 100,
-        content_max_length: int = 50000,
-        spam_detection_enabled: bool = True,
-        title_max_length: int = 500,
-        author_max_length: int = 100,
-        tag_max_length: int = 50,
-        max_tags_per_article: int = 20,
+        settings: ContentNormalizationSettings | None = None,
         ai_provider: AIProvider | None = None,
     ):
         """
         Initialize normalizer with configuration and AI provider.
 
         Args:
-            content_min_length: Minimum content length in characters (default: 100)
-            content_max_length: Maximum content length in characters (default: 50000)
-            spam_detection_enabled: Enable AI-powered spam detection (default: True)
-            title_max_length: Maximum title length in characters (default: 500)
-            author_max_length: Maximum author name length (default: 100)
-            tag_max_length: Maximum tag length (default: 50)
-            max_tags_per_article: Maximum tags per article (default: 20)
+            settings: Content normalization settings (uses get_settings().content if not provided)
             ai_provider: AI provider instance (creates default if not provided)
         """
-        self.content_min_length = content_min_length
-        self.content_max_length = content_max_length
-        self.spam_detection_enabled = spam_detection_enabled
-        self.title_max_length = title_max_length
-        self.author_max_length = author_max_length
-        self.tag_max_length = tag_max_length
-        self.max_tags_per_article = max_tags_per_article
+        self.settings = settings or get_settings().content
+
+        # Extract individual fields for convenience
+        self.content_min_length = self.settings.min_length
+        self.content_max_length = self.settings.max_length
+        self.spam_detection_enabled = self.settings.spam_detection_enabled
+        self.title_max_length = self.settings.title_max_length
+        self.author_max_length = self.settings.author_max_length
+        self.tag_max_length = self.settings.tag_max_length
+        self.max_tags_per_article = self.settings.max_tags_per_article
 
         # Create AI provider if not injected
-        settings = get_settings()
-        provider = ai_provider or create_ai_provider(settings)
+        provider = ai_provider or create_ai_provider(get_settings())
 
         # Initialize PydanticAI agent for spam detection
         self.spam_agent = provider.create_agent(

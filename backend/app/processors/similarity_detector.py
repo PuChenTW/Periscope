@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from app.config import Settings, get_settings
+from app.config import SimilaritySettings, get_settings
 from app.processors.ai_provider import AIProvider, create_ai_provider
 from app.processors.fetchers.base import Article
 from app.utils.cache import CacheProtocol
@@ -65,7 +65,7 @@ class SimilarityDetector:
     def __init__(
         self,
         cache: CacheProtocol,
-        settings: Settings | None = None,
+        settings: SimilaritySettings | None = None,
         ai_provider: AIProvider | None = None,
     ):
         """
@@ -73,14 +73,14 @@ class SimilarityDetector:
 
         Args:
             cache: Cache instance for storing similarity results
-            settings: Application settings (uses get_settings() if not provided)
+            settings: Similarity settings (uses get_settings().similarity if not provided)
             ai_provider: AI provider instance (creates from settings if not provided)
         """
-        self.settings = settings or get_settings()
+        self.settings = settings or get_settings().similarity
         self.cache = cache
 
         # Create AI provider if not injected
-        provider = ai_provider or create_ai_provider(self.settings)
+        provider = ai_provider or create_ai_provider(get_settings())
 
         # Initialize PydanticAI agent using the provider
         self.agent = provider.create_agent(
@@ -178,12 +178,12 @@ class SimilarityDetector:
             similarity_score = result.output
 
             # Determine if articles are similar based on confidence threshold
-            is_similar = similarity_score.confidence >= self.settings.similarity.threshold
+            is_similar = similarity_score.confidence >= self.settings.threshold
 
             logger.debug(
                 f"Compared articles: '{article1.title[:50]}...' vs '{article2.title[:50]}...' "
                 f"-> Similar: {is_similar} (confidence: {similarity_score.confidence:.2f}, "
-                f"threshold: {self.settings.similarity.threshold:.2f})"
+                f"threshold: {self.settings.threshold:.2f})"
             )
 
             # Cache the result
@@ -299,7 +299,7 @@ class SimilarityDetector:
     async def _cache_similarity(self, cache_key: str, is_similar: bool) -> None:
         """Cache similarity result."""
         try:
-            ttl_seconds = self.settings.similarity.cache_ttl_minutes * 60
+            ttl_seconds = self.settings.cache_ttl_minutes * 60
             data = {"is_similar": is_similar}
             await self.cache.setex(cache_key, ttl_seconds, json.dumps(data))
         except Exception as e:

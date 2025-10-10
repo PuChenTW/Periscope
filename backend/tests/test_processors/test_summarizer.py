@@ -12,9 +12,6 @@ from pydantic_ai.models.test import TestModel
 
 from app.config import (
     CustomPromptSettings,
-    DatabaseSettings,
-    SecuritySettings,
-    Settings,
     SummarizationSettings,
 )
 from app.processors.fetchers.base import Article
@@ -359,13 +356,11 @@ class TestSummarizer:
     async def test_custom_summary_length_setting(self, mock_ai_provider):
         """Test that custom summary length setting is respected in system prompt."""
         # Create settings with custom summary length
-        custom_settings = Settings(
-            database=DatabaseSettings(url="postgresql://test"),
-            security=SecuritySettings(secret_key="test-secret"),
-            summarization=SummarizationSettings(max_length=300),  # Custom limit
+        summarizer = Summarizer(
+            summarization_settings=SummarizationSettings(max_length=300),
+            ai_provider=mock_ai_provider,
+            summary_style="brief",
         )
-
-        summarizer = Summarizer(settings=custom_settings, ai_provider=mock_ai_provider, summary_style="brief")
 
         # Check system prompt contains custom length
         system_prompt = summarizer._build_system_prompt()
@@ -522,19 +517,12 @@ class TestSummarizerCustomPrompts:
     @pytest.mark.asyncio
     async def test_validation_disabled_uses_prompt_as_is(self, mock_ai_provider, mock_prompt_ai_guard):
         """Test that when validation is disabled, prompts are used as-is."""
-        # Create settings with validation disabled
-        custom_settings = Settings(
-            database=DatabaseSettings(url="postgresql://test"),
-            security=SecuritySettings(secret_key="test-secret"),
-            custom_prompt=CustomPromptSettings(validation_enabled=False),
-        )
-
         # Even an invalid-looking prompt should be accepted
         prompt = "This would normally be rejected but validation is off"
 
         with patch("app.processors.summarizer.logger") as mock_logger:
             summarizer = Summarizer(
-                settings=custom_settings,
+                custom_prompt_settings=CustomPromptSettings(validation_enabled=False),
                 ai_provider=mock_ai_provider,
                 summary_style="brief",
                 custom_prompt=prompt,

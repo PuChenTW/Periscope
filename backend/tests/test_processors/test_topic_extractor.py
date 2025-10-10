@@ -10,7 +10,7 @@ from pydantic import HttpUrl
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
-from app.config import Settings
+from app.config import TopicExtractionSettings
 from app.processors.fetchers.base import Article
 from app.processors.topic_extractor import TopicExtractionResult, TopicExtractor
 
@@ -127,7 +127,7 @@ class TestTopicExtractor:
             topics = await topic_extractor.extract_topics(sample_articles[0])
 
             # Should only return first 5 topics (max limit)
-            assert len(topics) <= topic_extractor.settings.topic_extraction.max_topics
+            assert len(topics) <= topic_extractor.settings.max_topics
             assert len(topics) == 5
 
     @pytest.mark.asyncio
@@ -258,12 +258,8 @@ class TestTopicExtractor:
     async def test_custom_max_topics_setting(self, mock_ai_provider, sample_articles):
         """Test that custom max_topics setting is respected."""
 
-        # Create settings with custom max topics using nested structure
-        custom_settings = Settings(
-            database={"url": "postgresql://test"},
-            security={"secret_key": "test-secret"},
-            topic_extraction={"max_topics": 3},  # Custom limit
-        )
+        # Create settings with custom max topics
+        custom_settings = TopicExtractionSettings(max_topics=3)
 
         extractor = TopicExtractor(settings=custom_settings, ai_provider=mock_ai_provider)
 

@@ -10,6 +10,7 @@ from pydantic import HttpUrl
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
+from app.config import ContentNormalizationSettings
 from app.processors.fetchers.base import Article
 from app.processors.quality_scorer import ContentQualityResult, QualityScorer
 
@@ -42,12 +43,16 @@ class TestQualityScorer:
     @pytest.fixture
     def quality_scorer(self, mock_ai_provider):
         """Create QualityScorer instance for testing with default settings."""
-        return QualityScorer(quality_scoring_enabled=True, ai_provider=mock_ai_provider)
+        return QualityScorer(
+            ai_provider=mock_ai_provider, settings=ContentNormalizationSettings(quality_scoring_enabled=True)
+        )
 
     @pytest.fixture
     def quality_scorer_disabled(self, mock_ai_provider):
         """Create QualityScorer with AI quality scoring disabled."""
-        return QualityScorer(quality_scoring_enabled=False, ai_provider=mock_ai_provider)
+        return QualityScorer(
+            ai_provider=mock_ai_provider, settings=ContentNormalizationSettings(quality_scoring_enabled=False)
+        )
 
     @pytest.mark.asyncio
     async def test_metadata_score_calculation(self, quality_scorer_disabled):
