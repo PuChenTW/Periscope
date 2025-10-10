@@ -101,6 +101,17 @@ Accessed via `settings.content.*`
 - `CONTENT__MAX_TAGS_PER_ARTICLE`: Maximum tags per article (default: 20)
 - `CONTENT__QUALITY_SCORING_ENABLED`: Enable quality scoring (default: true)
 
+### Personalization Configuration
+Accessed via `settings.personalization.*`
+- `PERSONALIZATION__KEYWORD_WEIGHT_TITLE`: Weight for title keyword matches (default: 3)
+- `PERSONALIZATION__KEYWORD_WEIGHT_CONTENT`: Weight for content keyword matches (default: 2)
+- `PERSONALIZATION__KEYWORD_WEIGHT_TAGS`: Weight for tag/topic keyword matches (default: 4)
+- `PERSONALIZATION__MAX_KEYWORDS`: Maximum keywords per interest profile (default: 50)
+- `PERSONALIZATION__RELEVANCE_THRESHOLD_DEFAULT`: Default relevance threshold for filtering (default: 40, range: 0-100)
+- `PERSONALIZATION__BOOST_FACTOR_DEFAULT`: Default boost factor multiplier (default: 1.0)
+- `PERSONALIZATION__CACHE_TTL_MINUTES`: Cache duration for relevance results (default: 720 = 12 hours)
+- `PERSONALIZATION__ENABLE_SEMANTIC_SCORING`: Enable AI semantic scoring (default: true)
+
 ## Processor Settings Architecture
 
 ### Design Principle
@@ -138,6 +149,9 @@ Configuration for AI-powered prompt validation. Controls whether AI validation i
 
 **ContentNormalizationSettings:**
 Comprehensive configuration for content validation, spam detection, and quality scoring. Groups all content normalization and quality rules in a single settings object.
+
+**PersonalizationSettings:**
+Configuration for relevance scoring and personalization. Controls keyword weighting, relevance thresholds, boost factors, cache duration, and semantic scoring toggle.
 
 ### Dependency Injection Pattern
 

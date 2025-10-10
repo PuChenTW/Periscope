@@ -319,7 +319,88 @@ The QualityScorer accepts **ContentNormalizationSettings** which includes:
 
 When AI scoring is disabled, metadata score is scaled to 0-100 range. This allows quality scoring to be toggled without changing the scoring interface.
 
-## 8. Processing Pipeline
+## 8. Relevance Scoring Service
+
+Personalizes article rankings using hybrid keyword matching and optional AI semantic analysis to score article relevance against user interest profiles.
+
+### Key Features
+
+- **Three-Stage Scoring**: Keyword matching (0-60), semantic AI (0-30), temporal/quality boosts (0-10)
+- **Deterministic Keyword Matching**: Fast rule-based scoring with configurable field weights (title/content/tags)
+- **Optional AI Semantic Scoring**: Runs only when keyword score is in 16-54 range or boost_factor > 1.0
+- **Temporal Decay**: Linear 5-point boost for fresh content (0-24 hours)
+- **Quality Boost**: +5 points for high-quality articles (≥80 score) with at least one keyword match
+- **Configurable Thresholds**: User-defined relevance_threshold and boost_factor per interest profile
+- **Redis Caching**: 12-hour TTL cache for relevance results to avoid redundant AI calls
+- **Explainable Scoring**: Full breakdown with matched keywords, component scores, and reasoning
+- **Never Blocks Content**: Empty profiles pass all articles with 0 score and passes_threshold=True
+- **Testing**: Comprehensive test coverage with 26 passing tests
+
+### Scoring Algorithm
+
+**Stage 1 - Keyword Matching (0-60 points):**
+- Normalize keywords and article text (lowercase, strip punctuation)
+- Count unique keyword hits with field-specific weights:
+  - Title: weight 3
+  - Content: weight 2
+  - Tags: weight 4
+- Clamp to 60 points maximum
+- Skip AI if score ≥ 55 (clearly relevant) or ≤ 15 with boost_factor ≤ 1.0 (clearly irrelevant)
+
+**Stage 2 - Semantic Scoring (0-30 points):**
+- Only runs when: 16 ≤ keyword_score < 55 OR boost_factor > 1.0
+- Sends to AI: normalized keywords, title, first 800 chars of content, summary (if exists), ai_topics
+- AI returns: semantic_score (0-30), matched_interests (top 5), reasoning, confidence
+- On error/timeout: returns 0 and reasoning "ai_error"
+
+**Stage 3 - Temporal & Quality Boosts (0-10 points):**
+- **Temporal boost**: Linear decay from 5 points (0 hours old) to 0 (24+ hours old)
+- **Quality boost**: +5 points if quality_score ≥ 80 AND at least one keyword matched
+
+**Final Score:**
+- Sum all stages, apply boost_factor, clamp to 0-100
+- Compare to relevance_threshold to set passes_relevance_threshold flag
+- Store full breakdown in article.metadata["relevance_breakdown"]
+
+### Configuration
+
+The RelevanceScorer accepts **PersonalizationSettings** which includes:
+- `keyword_weight_title`: Weight for title matches (default: 3)
+- `keyword_weight_content`: Weight for content matches (default: 2)
+- `keyword_weight_tags`: Weight for tag/topic matches (default: 4)
+- `max_keywords`: Maximum keywords per profile (default: 50)
+- `relevance_threshold_default`: Default threshold for filtering (default: 40)
+- `boost_factor_default`: Default boost multiplier (default: 1.0)
+- `cache_ttl_minutes`: Cache duration for relevance results (default: 720 = 12 hours)
+- `enable_semantic_scoring`: Enable/disable AI semantic scoring (default: true)
+
+Users can override threshold and boost_factor per interest profile via InterestProfile model fields.
+
+### Integration Points
+
+- Called during personalization activity after quality scoring
+- Requires Article.ai_topics from topic extraction
+- Requires Article.metadata["quality_score"] from quality scorer
+- Requires Article.published_at for temporal boost
+- Uses InterestProfile.keywords, relevance_threshold, boost_factor
+- Outputs stored in Article.metadata for digest assembly filtering/ranking
+
+### Caching
+
+**Redis Key Pattern**: `relevance:{profile_id}:{article_digest}`
+- Article digest: sha1 hash of title + URL (first 16 chars)
+- TTL: 720 minutes (12 hours) - configurable via PERSONALIZATION__CACHE_TTL_MINUTES
+- Stores full RelevanceBreakdown JSON for explainability
+- Cache hit avoids all scoring stages including AI calls
+
+### Error Handling
+
+- Malformed profile (no keywords): Returns 0 score with passes_threshold=True
+- AI timeout/error: Returns 0 semantic score with "ai_error" reasoning
+- Empty article fields: Gracefully handles missing title/content/tags
+- Logging: Warning on AI failures, Info on cache hits/misses (debug builds)
+
+## 9. Processing Pipeline
 
 Chain of responsibility pattern for content processing stages: normalization, validation, topic extraction, similarity detection, summarization, quality scoring, and personalization.
 
@@ -331,7 +412,7 @@ Chain of responsibility pattern for content processing stages: normalization, va
 4. **Similarity Detection**: Group similar articles
 5. **Summarization**: Generate concise summaries
 6. **Quality Scoring**: Assess article quality
-7. **Personalization**: Score relevance to user interests (planned)
+7. **Personalization**: Score relevance to user interests (✅ IMPLEMENTED)
 
 ### Design Principles
 
@@ -352,6 +433,7 @@ Chain of responsibility pattern for content processing stages: normalization, va
 - **Summarization**: Summary styles, custom prompts with validation, error handling, fallbacks, content truncation
 - **Content Normalization**: Spam detection, length validation, metadata normalization, date handling
 - **Quality Scoring**: Metadata scoring, AI quality assessment, score calculation, enabled/disabled states
+- **Relevance Scoring**: Keyword matching, semantic AI scoring, boosts, thresholds, caching, empty profiles
 
 ### Test Categories
 
