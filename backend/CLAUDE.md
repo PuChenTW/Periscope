@@ -19,6 +19,20 @@ This document provides comprehensive guidance for developing the backend systems
 
 ## Coding Guidelines
 
+### Python Environment and Execution
+
+**Always use `uv run` to execute Python scripts and commands.**
+
+```bash
+# ✅ GOOD
+uv run python main.py
+uv run pytest
+
+# ❌ BAD
+python main.py
+pytest
+```
+
 ### Programming Paradigm
 
 **Prioritize functional programming unless object-oriented offers a significant advantage.**
