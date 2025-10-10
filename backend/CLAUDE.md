@@ -19,6 +19,62 @@ This document provides comprehensive guidance for developing the backend systems
 
 ## Coding Guidelines
 
+### Python Environment and Execution
+
+**Always use `uv run` to execute Python scripts and commands.**
+
+```bash
+# ✅ GOOD
+uv run python main.py
+uv run pytest
+
+# ❌ BAD
+python main.py
+pytest
+```
+
+### Programming Paradigm
+
+**Prioritize functional programming unless object-oriented offers a significant advantage.**
+
+Prefer functional approaches with pure functions, immutability, and composition over class-based object-oriented patterns. Use OOP only when it provides clear benefits such as:
+- Complex stateful objects with encapsulated behavior
+- Framework requirements (SQLAlchemy models, Pydantic models)
+- Shared interfaces requiring polymorphism
+
+**Functional Style:**
+```python
+# ✅ GOOD: Pure function with clear inputs/outputs
+def calculate_relevance_score(
+    article: Article,
+    keywords: list[str]
+) -> float:
+    matches = sum(1 for kw in keywords if kw.lower() in article.content.lower())
+    return matches / len(keywords) if keywords else 0.0
+
+# ✅ GOOD: Function composition
+def process_articles(articles: list[Article]) -> list[Article]:
+    return [
+        article
+        for article in articles
+        if is_valid(article) and is_recent(article)
+    ]
+```
+
+**When OOP Makes Sense:**
+```python
+# ✅ GOOD: Framework-required models
+class User(SQLModel, ULIDMixin, TimestampMixin):
+    email: str
+    hashed_password: str
+
+# ✅ GOOD: Complex stateful service
+class ContentFetcher:
+    def __init__(self, http_client: HTTPClient, cache: Cache):
+        self._client = http_client
+        self._cache = cache
+```
+
 ### String Formatting and Multi-line Text
 
 **Always use `textwrap.dedent()` for multi-line strings**, especially for:
