@@ -235,6 +235,9 @@ app/
 │   ├── ai_provider.py        # AI provider abstraction (✅ IMPLEMENTED)
 │   ├── similarity_detector.py # Similarity detection & grouping (✅ IMPLEMENTED)
 │   ├── topic_extractor.py    # Topic extraction service (✅ IMPLEMENTED)
+│   ├── summarizer.py         # Article summarization service (✅ IMPLEMENTED)
+│   ├── normalizer.py         # Content normalization service (✅ IMPLEMENTED)
+│   ├── quality_scorer.py     # Quality scoring service (✅ IMPLEMENTED)
 │   ├── fetchers/              # Content fetchers with pluggable implementations
 │   │   ├── __init__.py
 │   │   ├── base.py           # Abstract base fetcher interface (✅ IMPLEMENTED)

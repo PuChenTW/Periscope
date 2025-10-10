@@ -175,6 +175,86 @@ Test suite covering topic extraction, error handling, content validation, and ma
 - AI provider integration
 - Cache behavior
 
+**Testing Approach:**
+- Use mock AI provider for deterministic results
+- Test with custom TopicExtractionSettings for different max_topics values
+- Verify extraction works independently for multiple articles
+- Test error handling returns empty list gracefully
+
+### Summarization Tests
+Test suite covering multiple summary styles, custom prompts with validation, and error handling.
+
+**Coverage Areas:**
+- Multiple summary styles (brief, detailed, bullet_points)
+- Custom prompt validation (pattern-based and AI-powered)
+- Summary length enforcement
+- Content truncation for AI processing
+- Topic integration in prompts
+- Error handling with content excerpts as fallback
+- Minimal content handling
+- Async preparation and validation
+
+**Testing Approach:**
+- Use mock AI provider for deterministic summary generation
+- Test with custom SummarizationSettings, CustomPromptSettings, AIPromptValidationSettings
+- Verify each summary style produces expected format
+- Test custom prompt validation rejection and acceptance
+- Verify fallback behavior when AI fails
+
+**Key Scenarios:**
+- Style variations (brief vs detailed vs bullet points)
+- Prompt validation (valid prompts pass, invalid prompts rejected)
+- Fallback behavior (excerpts when AI unavailable)
+- Content length handling (minimal content uses excerpt)
+
+### Content Normalization Tests
+Test suite covering spam detection, length validation, metadata normalization, and date handling.
+
+**Coverage Areas:**
+- Content quality validation (length, whitespace)
+- AI-powered spam detection
+- Title, author, tags normalization
+- Date normalization to UTC
+- URL tracking parameter removal
+- Field truncation enforcement
+- Error handling without exceptions
+
+**Testing Approach:**
+- Use mock AI provider for spam detection
+- Test with custom ContentNormalizationSettings for different thresholds
+- Verify normalization never raises exceptions (always returns or None)
+- Test all metadata standardization rules
+
+**Key Scenarios:**
+- Valid content passes all checks
+- Short content rejected
+- Spam content detected and rejected
+- Metadata cleaned and normalized
+- Date handling (naive → UTC, timezone conversion)
+
+### Quality Scoring Tests
+Test suite covering metadata scoring, AI quality assessment, and score calculation.
+
+**Coverage Areas:**
+- Metadata score calculation (0-50 points)
+- AI content quality assessment (0-50 points)
+- Combined score calculation (0-100 scale)
+- Quality scoring enabled/disabled states
+- Error handling with neutral fallback scores
+- Score breakdown tracking
+
+**Testing Approach:**
+- Use mock AI provider for content quality evaluation
+- Test with ContentNormalizationSettings.quality_scoring_enabled toggled
+- Verify metadata scoring rules (author, date, tags, length)
+- Verify AI scoring fallback on errors
+
+**Key Scenarios:**
+- Quality scoring enabled (metadata + AI scores)
+- Quality scoring disabled (metadata only, scaled to 100)
+- AI errors return neutral scores
+- Score breakdown properly tracked in metadata
+
 ## 3. Test Configuration Approach
 
 ### pytest-mock-resources

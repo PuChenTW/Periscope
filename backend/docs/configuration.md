@@ -101,6 +101,57 @@ Accessed via `settings.content.*`
 - `CONTENT__MAX_TAGS_PER_ARTICLE`: Maximum tags per article (default: 20)
 - `CONTENT__QUALITY_SCORING_ENABLED`: Enable quality scoring (default: true)
 
+## Processor Settings Architecture
+
+### Design Principle
+
+Each processor class accepts only the specific settings it needs rather than the full Settings object. This architectural pattern provides:
+
+**Clear Dependencies:**
+Easy to see what configuration each processor requires. Dependencies are explicit in constructor signatures.
+
+**Better Testability:**
+Test with minimal settings objects containing only relevant configuration. No need to create full Settings objects for testing individual processors.
+
+**Loose Coupling:**
+Processors don't depend on unrelated configuration. Changes to unrelated settings don't affect processor initialization.
+
+**Type Safety:**
+Specific settings types prevent configuration errors at compile time. Wrong settings type causes immediate type checking failures.
+
+### Settings Groups
+
+**SimilaritySettings:**
+Configuration for similarity detection and grouping engine. Controls threshold for similarity matching, cache duration for results, and batch size for comparison operations.
+
+**TopicExtractionSettings:**
+Configuration for topic extraction service. Controls maximum number of topics extracted per article.
+
+**SummarizationSettings:**
+Configuration for summary generation. Controls maximum summary length and content truncation for AI processing.
+
+**CustomPromptSettings:**
+Configuration for user-defined custom prompts. Controls prompt length limits and validation rules.
+
+**AIPromptValidationSettings:**
+Configuration for AI-powered prompt validation. Controls whether AI validation is enabled, confidence thresholds, and cache duration.
+
+**ContentNormalizationSettings:**
+Comprehensive configuration for content validation, spam detection, and quality scoring. Groups all content normalization and quality rules in a single settings object.
+
+### Dependency Injection Pattern
+
+Processors accept settings via constructor parameters with sensible defaults from global configuration. This allows:
+
+**Production Usage:**
+Processors use global settings from environment variables via `get_settings()`. No explicit settings passing required in production code.
+
+**Testing Flexibility:**
+Tests can create custom settings objects with specific values for test scenarios. Easy to test edge cases and specific configurations.
+
+**Optional Override:**
+Settings parameters default to None and fallback to `get_settings().<group>`. Explicit settings can be passed when needed without changing default behavior.
+
 ### Security Configuration
 Accessed via `settings.security.*`
 - `SECURITY__SECRET_KEY`: Secret key for JWT token signing (required)

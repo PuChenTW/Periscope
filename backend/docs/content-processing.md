@@ -120,7 +120,8 @@ AI-powered semantic analysis to detect and group similar articles from different
 - **Connected Components**: Efficient grouping algorithm for similar articles
 - **Topic Aggregation**: Combines topics from all articles in groups (from Article.ai_topics)
 - **Caching**: Redis caching with configurable TTL to avoid redundant AI calls
-- **Configurable Threshold**: Similarity threshold configuration
+- **Configurable Threshold**: Similarity threshold configuration via **SimilaritySettings**
+- **Dependency Injection**: Accepts specific settings object for clear configuration boundaries
 - **Error Handling**: Graceful fallback behavior on AI failures
 - **Testing**: Comprehensive test coverage
 
@@ -135,8 +136,12 @@ AI-powered semantic analysis to detect and group similar articles from different
 
 ### Configuration
 
-- `SIMILARITY_THRESHOLD`: Minimum confidence score for similarity matching
-- `SIMILARITY_CACHE_TTL_MINUTES`: Cache duration for similarity results
+The SimilarityDetector accepts **SimilaritySettings** which includes:
+- `threshold`: Minimum confidence score for similarity matching
+- `cache_ttl_minutes`: Cache duration for similarity results
+- `batch_size`: Maximum article pairs to compare
+
+This focused settings object makes dependencies explicit and improves testability.
 
 ## 4. Topic Extraction Service
 
@@ -147,7 +152,8 @@ AI-powered topic identification for article categorization and relevance scoring
 - **AI-Powered Extraction**: Uses configurable AI providers
 - **Multi-Topic Support**: Extracts key topics per article
 - **Structured Output**: TopicExtractionResult Pydantic model
-- **Configurable Limit**: Max topics via TOPIC_EXTRACTION_MAX_TOPICS
+- **Configurable Limit**: Max topics via **TopicExtractionSettings**
+- **Focused Configuration**: Receives only topic extraction-related settings
 - **Content Truncation**: Content limit for efficient token usage
 - **Error Handling**: Graceful fallback to empty list
 - **Article Integration**: ai_topics field in Article model
@@ -164,7 +170,10 @@ AI-powered topic identification for article categorization and relevance scoring
 
 ### Configuration
 
-- `TOPIC_EXTRACTION_MAX_TOPICS`: Maximum topics per article
+The TopicExtractor accepts **TopicExtractionSettings** which includes:
+- `max_topics`: Maximum topics per article (default: 5, range: 1-10)
+
+This minimal settings object ensures the extractor only depends on topic-related configuration.
 
 ### Integration Points
 
@@ -184,6 +193,8 @@ AI-powered article summarization to generate concise, user-friendly summaries fo
 - **Configurable Length**: Max word count and content truncation settings
 - **Structured Output**: SummaryResult Pydantic model with summary and key points
 - **Topic Integration**: Uses topics from TopicExtractor for enhanced context
+- **Multi-Settings Architecture**: Accepts three separate settings objects for different concerns
+- **Custom Prompt Support**: User-defined prompts with validation
 - **Graceful Fallback**: Content excerpts on AI errors or minimal content
 - **Async Architecture**: Full async/await support for AI integration
 - **Testing**: Comprehensive test coverage
@@ -200,8 +211,23 @@ AI-powered article summarization to generate concise, user-friendly summaries fo
 
 ### Configuration
 
-- `SUMMARY_MAX_LENGTH`: Maximum words in summary
-- `SUMMARY_CONTENT_LENGTH`: Maximum chars sent to AI
+The Summarizer accepts three separate settings objects for independent configuration of different concerns:
+
+**SummarizationSettings:**
+- `max_length`: Maximum words in summary
+- `content_length`: Maximum chars sent to AI
+
+**CustomPromptSettings:**
+- `max_length`: Maximum custom prompt length
+- `min_length`: Minimum custom prompt length
+- `validation_enabled`: Enable/disable prompt validation
+
+**AIPromptValidationSettings:**
+- `enabled`: Enable AI-powered validation
+- `threshold`: Minimum confidence score for validation
+- `cache_ttl_minutes`: Cache duration for validation results
+
+This separation allows independent configuration and testing of summarization, custom prompts, and validation logic.
 
 ### Summary Styles
 
@@ -220,17 +246,92 @@ AI-powered article summarization to generate concise, user-friendly summaries fo
 - Self-contained items
 - Organized by importance
 
-## 6. Processing Pipeline
+## 6. Content Normalization Service
 
-Chain of responsibility pattern for content processing stages: validation, topic extraction, similarity detection, summarization, and personalization.
+Validates and standardizes article content and metadata before AI processing.
+
+### Key Features
+
+- **Content Validation**: Length checks and quality standards
+- **Spam Detection**: AI-powered spam identification
+- **Metadata Standardization**: Title, author, tags normalization
+- **Date Normalization**: UTC-aware timestamp handling
+- **URL Cleaning**: Remove tracking parameters
+- **Field Truncation**: Enforce maximum lengths
+- **Never Fails**: Uses fallbacks and logs warnings instead of exceptions
+- **Configurable Rules**: All validation rules via **ContentNormalizationSettings**
+
+### Validation Process
+
+1. Content quality checks (length, whitespace)
+2. AI-powered spam detection (optional)
+3. Date normalization to UTC
+4. Title and author cleanup
+5. Tag normalization and deduplication
+6. URL parameter removal
+7. Content length enforcement
+
+### Configuration
+
+The ContentNormalizer accepts **ContentNormalizationSettings** which includes:
+- `min_length`: Minimum content length
+- `max_length`: Maximum content length
+- `spam_detection_enabled`: Enable AI spam detection
+- `title_max_length`: Maximum title length
+- `author_max_length`: Maximum author length
+- `tag_max_length`: Maximum tag length
+- `max_tags_per_article`: Maximum number of tags
+- `quality_scoring_enabled`: Enable quality scoring
+
+This comprehensive settings object groups all content normalization and quality rules in one place.
+
+## 7. Quality Scoring Service
+
+Assesses article quality using hybrid approach combining rule-based metadata scoring with AI-powered content analysis.
+
+### Key Features
+
+- **Hybrid Scoring**: Combines metadata completeness (0-50) with AI content quality (0-50)
+- **Metadata Scoring**: Author presence, publish date, tags, content length
+- **AI Content Analysis**: Writing quality, informativeness, credibility assessment
+- **Structured Evaluation**: ContentQualityResult Pydantic model with reasoning
+- **Score Breakdown**: Tracks metadata vs AI contribution
+- **Configurable**: Enable/disable via **ContentNormalizationSettings**
+- **Graceful Degradation**: Fallback to metadata-only scoring if AI fails
+
+### Scoring Components
+
+**Metadata Score (0-50 points):**
+- Author presence: +10
+- Published date: +10
+- Tags present: +5
+- Content length: +15 (>500 chars), +10 bonus (>1000 chars)
+
+**AI Content Score (0-50 points):**
+- Writing quality: 0-20 (clarity, coherence, grammar)
+- Informativeness: 0-20 (depth, coverage, value)
+- Credibility: 0-10 (evidence, balance, trustworthiness)
+
+### Configuration
+
+The QualityScorer accepts **ContentNormalizationSettings** which includes:
+- `quality_scoring_enabled`: Enable/disable AI quality assessment
+
+When AI scoring is disabled, metadata score is scaled to 0-100 range. This allows quality scoring to be toggled without changing the scoring interface.
+
+## 8. Processing Pipeline
+
+Chain of responsibility pattern for content processing stages: normalization, validation, topic extraction, similarity detection, summarization, quality scoring, and personalization.
 
 ### Pipeline Stages
 
-1. **Validation**: Check content quality and completeness
-2. **Topic Extraction**: Identify key themes and topics
-3. **Similarity Detection**: Group similar articles
-4. **Summarization**: Generate concise summaries
-5. **Personalization**: Score relevance to user interests (planned)
+1. **Normalization**: Standardize content and metadata
+2. **Validation**: Check content quality and completeness
+3. **Topic Extraction**: Identify key themes and topics
+4. **Similarity Detection**: Group similar articles
+5. **Summarization**: Generate concise summaries
+6. **Quality Scoring**: Assess article quality
+7. **Personalization**: Score relevance to user interests (planned)
 
 ### Design Principles
 
@@ -245,10 +346,12 @@ Chain of responsibility pattern for content processing stages: validation, topic
 ### By Component
 
 - **RSS Feed Processing**: HTTP client, URL validation, RSS/Atom parsing, factory pattern, error handling
-- **Similarity Detection**: Mock AI provider, grouping logic, topic aggregation, caching
-- **Topic Extraction**: Topic extraction, error handling, content validation, max topics
-- **Summarization**: Summary styles, error handling, fallbacks, content truncation, topic integration
-- **AI Provider**: Covered in dependent component tests
+- **AI Provider Abstraction**: Covered in dependent component tests with mock providers
+- **Similarity Detection**: Mock AI provider, grouping logic, topic aggregation, caching behavior
+- **Topic Extraction**: Topic extraction, error handling, content validation, max topics enforcement
+- **Summarization**: Summary styles, custom prompts with validation, error handling, fallbacks, content truncation
+- **Content Normalization**: Spam detection, length validation, metadata normalization, date handling
+- **Quality Scoring**: Metadata scoring, AI quality assessment, score calculation, enabled/disabled states
 
 ### Test Categories
 
