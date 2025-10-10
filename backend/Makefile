@@ -24,6 +24,9 @@ restart:  ## Restart all services
 test:  ## Run pytest test suite
 	uv run pytest tests/ -v -n auto
 
+test-cov:  ## Run tests with coverage report
+	uv run pytest --cov=./app tests/ -n auto
+
 lint:  ## Run linting checks
 	uv run ruff check app/ tests/
 	uv run mypy app/
