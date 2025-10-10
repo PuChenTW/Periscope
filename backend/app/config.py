@@ -48,6 +48,20 @@ class Settings(BaseSettings):
     # Topic Extraction Settings
     topic_extraction_max_topics: int = Field(5, env="TOPIC_EXTRACTION_MAX_TOPICS")
 
+    # Summarization Settings
+    summary_max_length: int = Field(500, env="SUMMARY_MAX_LENGTH")
+    summary_content_length: int = Field(2000, env="SUMMARY_CONTENT_LENGTH")
+
+    # Custom Prompt Settings
+    custom_prompt_max_length: int = Field(1000, env="CUSTOM_PROMPT_MAX_LENGTH")
+    custom_prompt_min_length: int = Field(10, env="CUSTOM_PROMPT_MIN_LENGTH")
+    custom_prompt_validation_enabled: bool = Field(True, env="CUSTOM_PROMPT_VALIDATION_ENABLED")
+
+    # AI Prompt Validation Settings (Final Guardrail Layer)
+    ai_prompt_validation_enabled: bool = Field(True, env="AI_PROMPT_VALIDATION_ENABLED")
+    ai_prompt_validation_threshold: float = Field(0.8, env="AI_PROMPT_VALIDATION_THRESHOLD")
+    ai_prompt_validation_cache_ttl_minutes: int = Field(1440, env="AI_PROMPT_VALIDATION_CACHE_TTL_MINUTES")
+
     # Content Normalization Settings
     content_min_length: int = Field(100, env="CONTENT_MIN_LENGTH")
     content_max_length: int = Field(50000, env="CONTENT_MAX_LENGTH")
