@@ -24,6 +24,14 @@ repos:
       - id: ruff-format
         files: ^backend/
 
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.45.0
+    hooks:
+      - id: markdownlint
+        exclude: .claude/*
+        stages: [pre-commit]
+        args: [--disable=MD013, -f]
+
   - repo: local
     hooks:
       - id: update-coverage-badge
