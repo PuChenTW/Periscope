@@ -22,7 +22,7 @@ Processors mutate the `Article` in-place and append diagnostic info to `article.
 
 ## Inputs & Outputs
 
-- **Input**: List of `Article` objects (post-fetch). Each article must include `source_id`, `url`, `title`, `content`, `published_at`.
+- **Input**: List of `Article` objects (post-fetch). Each article must include `url`, `title`, `content`, and `fetch_timestamp`; `published_at` is recommended for freshness scoring.
 - **Output**: List of processed `Article` objects + similarity cluster map consumed by digest assembly.
 - **Persistent side effects**: None. All state persists via Redis caches or downstream repositories.
 
@@ -43,7 +43,7 @@ Processors mutate the `Article` in-place and append diagnostic info to `article.
 
 - Always run processors in the order above; changing order requires updating both this doc and `temporal-workflows.md`.
 - New processor? add to this table, document contract in its own file under `docs/processors/`, update Temporal activity.
-- Use `Article.digest()` (SHA1 of title+url) for cache keys; never invent new hashing strategy per processor.
+- Follow the cache-key guidance in each processor doc (most use article URL + profile/config context); do not invent new hashing strategies without updating the documentation.
 
 ## Settings Reference
 

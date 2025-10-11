@@ -19,7 +19,7 @@
 ## Dependencies
 
 - AI provider (only when `enable_semantic_scoring=True` and deterministic score ambiguous).
-- Redis cache key `relevance:{profile_id}:{article_digest}` (12 h TTL) to skip re-scoring.
+- Redis cache key `relevance:{profile_id}:{article.url}` (12 h TTL) to skip re-scoring.
 - `normalize_term_list()` from `app/utils/text_processing.py` for token cleanup.
 - Settings: see personalization section in `backend/docs/configuration.md`.
 
@@ -40,7 +40,7 @@
 ## Metrics & Instrumentation
 
 - Planned metrics (`relevance.keyword_only`, `relevance.semantic_calls`, `relevance.ai_failures`) to be added once telemetry workstream unblocked.
-- Logs include `profile_id`, `article_digest`, `keyword_score`, `semantic_score`, `boost`.
+- Logs include `profile_id`, `article_url`, `keyword_score`, `semantic_score`, `boost`.
 
 ## Tests
 

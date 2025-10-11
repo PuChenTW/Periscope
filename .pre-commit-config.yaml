@@ -30,7 +30,7 @@ repos:
       - id: markdownlint
         exclude: .claude/*
         stages: [pre-commit]
-        args: [--disable=MD013, -f]
+        args: [--disable=MD013, --disable=MD029, -f]
 
   - repo: local
     hooks:
