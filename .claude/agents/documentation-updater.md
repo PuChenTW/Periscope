@@ -117,7 +117,7 @@ When code examples are necessary:
 
 ### Handling Incomplete Information
 - Clearly mark planned vs implemented features
-- Use status indicators (✅ COMPLETED, 🚧 IN PROGRESS, 📋 PLANNED)
+- Use status indicators (🟢 Complete | 🟡 In Progress | ⏳ Pending | ⚠️ Blocked)
 - Note dependencies and prerequisites
 - Indicate future enhancements separately
 
