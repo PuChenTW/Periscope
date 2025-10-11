@@ -195,15 +195,16 @@ class Summarizer:
 
         return "\n".join(prompt_parts)
 
-    async def summarize(self, article: Article) -> Article:
+    async def summarize(self, article: Article, topics: list[str] | None = None) -> SummaryResult:
         """
         Generate a summary for an article using AI.
 
         Args:
             article: Article to summarize
+            topics: Optional list of topics from TopicExtractor to enhance summarization context
 
         Returns:
-            Article with summary field populated (original article if error occurs)
+            SummaryResult containing generated summary and key points
         """
         await self.prepare()
 
@@ -211,11 +212,15 @@ class Summarizer:
         if not article.content or len(article.content.strip()) < 100:
             logger.debug(f"Article '{article.title[:50]}...' has insufficient content for AI summarization")
             # Use first 150 characters as fallback summary
-            article.summary = article.content[:150] + "..." if article.content else article.title
-            return article
+            fallback_summary = article.content[:150] + "..." if article.content else article.title
+            return SummaryResult(
+                summary=fallback_summary,
+                key_points=[],
+                reasoning="Insufficient content for AI summarization, using excerpt",
+            )
 
-        # Prepare summarization prompt
-        prompt = self._build_summarization_prompt(article)
+        # Prepare summarization prompt (passing topics for context)
+        prompt = self._build_summarization_prompt(article, topics)
 
         try:
             # Run AI summarization
@@ -226,28 +231,45 @@ class Summarizer:
             if self.summary_style == "bullet_points":
                 # Format as bullet points
                 formatted_summary = "\n".join(f"• {point}" for point in summary_result.key_points)
-                article.summary = f"{summary_result.summary}\n\n{formatted_summary}"
+                final_summary = f"{summary_result.summary}\n\n{formatted_summary}"
             else:
                 # Brief or detailed style
-                article.summary = summary_result.summary
+                final_summary = summary_result.summary
 
             # Log summary generation with custom prompt indicator
             custom_indicator = " with custom prompt" if self.custom_prompt else ""
             logger.debug(
                 f"Generated {self.summary_style} summary{custom_indicator} for '{article.title[:50]}...': "
-                f"{len(article.summary)} chars - {summary_result.reasoning}"
+                f"{len(final_summary)} chars - {summary_result.reasoning}"
             )
 
-            return article
+            return SummaryResult(
+                summary=final_summary,
+                key_points=summary_result.key_points,
+                reasoning=summary_result.reasoning,
+            )
 
         except Exception as e:
             logger.error(f"Error generating summary for article '{article.title[:50]}...': {e}")
             # On error, use excerpt from content as fallback
-            article.summary = article.content[:300] + "..." if len(article.content) > 300 else article.content
-            return article
+            fallback_summary = article.content[:300] + "..." if len(article.content) > 300 else article.content
+            return SummaryResult(
+                summary=fallback_summary,
+                key_points=[],
+                reasoning=f"Error during summarization: {e!s}",
+            )
 
-    def _build_summarization_prompt(self, article: Article) -> str:
-        """Build prompt for AI summarization."""
+    def _build_summarization_prompt(self, article: Article, topics: list[str] | None = None) -> str:
+        """
+        Build prompt for AI summarization.
+
+        Args:
+            article: Article to summarize
+            topics: Optional list of topics from TopicExtractor
+
+        Returns:
+            Formatted prompt string
+        """
         # Truncate content to avoid token limits
         # Use configurable content length for summarization
         content = article.content[: self.summarization_settings.content_length] if article.content else ""
@@ -255,8 +277,13 @@ class Summarizer:
         # Include tags for additional context
         tags_str = ", ".join(article.tags) if article.tags else "None"
 
-        # Include topics if available (from TopicExtractor)
-        topics_str = ", ".join(article.ai_topics) if article.ai_topics else "Not extracted"
+        # Use provided topics or fall back to article's ai_topics
+        if topics:
+            topics_str = ", ".join(topics)
+        elif article.ai_topics:
+            topics_str = ", ".join(article.ai_topics)
+        else:
+            topics_str = "Not extracted"
 
         return textwrap.dedent(f"""\
             Article Title: {article.title}

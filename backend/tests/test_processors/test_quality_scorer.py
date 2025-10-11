@@ -12,7 +12,7 @@ from pydantic_ai.models.test import TestModel
 
 from app.config import ContentNormalizationSettings
 from app.processors.fetchers.base import Article
-from app.processors.quality_scorer import ContentQualityResult, QualityScorer
+from app.processors.quality_scorer import AIContentQualityResult, QualityScorer
 
 
 class TestQualityScorer:
@@ -25,9 +25,9 @@ class TestQualityScorer:
 
         def create_agent_mock(output_type, system_prompt):
             # Return appropriate TestModel based on output_type
-            if output_type == ContentQualityResult:
+            if output_type == AIContentQualityResult:
                 test_model = TestModel(
-                    custom_output_args=ContentQualityResult(
+                    custom_output_args=AIContentQualityResult(
                         writing_quality=15, informativeness=16, credibility=8, reasoning="Good quality article"
                     )
                 )
@@ -75,7 +75,9 @@ class TestQualityScorer:
         # When AI scoring disabled, metadata score is scaled to 0-100
         # Expected: 10 (author) + 10 (date) + 5 (tags) + 15 (>500 chars) + 10 (>1000 chars) = 50
         # Scaled: 50 * 2 = 100
-        assert result.metadata["quality_score"] == 100
+        assert result.quality_score == 100
+        assert result.metadata_score == 50
+        assert result.ai_content_score == 0
 
     @pytest.mark.asyncio
     async def test_metadata_score_minimal_article(self, quality_scorer_disabled):
@@ -93,7 +95,9 @@ class TestQualityScorer:
 
         assert result is not None
         # Expected: 0 (no metadata), scaled to 0-100 = 0
-        assert result.metadata["quality_score"] == 0
+        assert result.quality_score == 0
+        assert result.metadata_score == 0
+        assert result.ai_content_score == 0
 
     @pytest.mark.asyncio
     async def test_hybrid_quality_scoring_enabled(self, quality_scorer):
@@ -115,9 +119,9 @@ class TestQualityScorer:
         # Metadata score: 10 (author) + 10 (date) + 5 (tags) + 0 (content <500) = 25
         # AI score from default mock: 15 + 16 + 8 = 39
         # Total: 25 + 39 = 64
-        assert result.metadata["quality_score"] == 64
-        assert result.metadata["quality_breakdown"]["metadata_score"] == 25
-        assert result.metadata["quality_breakdown"]["ai_content_score"] == 39
+        assert result.quality_score == 64
+        assert result.metadata_score == 25
+        assert result.ai_content_score == 39
 
     @pytest.mark.asyncio
     async def test_quality_scoring_disabled(self, quality_scorer_disabled):
@@ -136,6 +140,6 @@ class TestQualityScorer:
         assert result is not None
         # When disabled, metadata score scaled to 0-100
         # Expected: (10 + 15) * 2 = 50
-        assert "quality_score" in result.metadata
-        assert result.metadata["quality_score"] == 50
-        assert result.metadata["quality_breakdown"]["ai_content_score"] == 0
+        assert result.quality_score == 50
+        assert result.metadata_score == 25
+        assert result.ai_content_score == 0

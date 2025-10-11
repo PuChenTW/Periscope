@@ -6,28 +6,29 @@ Refactor processors so they stop mutating articles in-place, then stand up the m
 
 ## Current State
 
-### ✅ Already Complete
+### ✅ Phase 0 Complete: Processor Refactor (2025-10-12)
 
-- `RelevanceScorer` implemented with 26 passing tests (`app/processors/relevance_scorer.py`)
-- Adds 3 metadata fields to articles: `relevance_score`, `relevance_breakdown`, `passes_relevance_threshold`
-- `InterestProfile` database model exists with `keywords`, `threshold`, `boost_factor`
-- All dependencies in place (settings, cache, AI provider)
-
-### ❌ Missing (Blocks Integration)
-
-- No Temporal infrastructure (`app/temporal/` directory doesn't exist)
-- No `score_relevance` activity wrapper
-- No integration tests validating metadata flow
-- No workflow to orchestrate the activity
+**Next**: Phase 1 - Temporal Infrastructure
 
 ### Implementation Plan
 
-#### Phase 0: Processor Refactor
+#### ✅ Phase 0: Processor Refactor (Complete)
 
-1. Audit each processor (`normalizer`, `quality_scorer`, `topic_extractor`, `relevance_scorer`, `summarizer`, `similarity_detector`) to ensure they return new article payloads instead of mutating the original input object.
-2. Introduce a lightweight `ProcessedArticle` data structure (or copy-on-write helper) so metadata aggregation happens in the pipeline orchestrator, not individual processors.
-3. Update unit tests and fixtures to assert immutability (original article untouched, processed output contains modifications).
-4. Document the immutability contract in `docs/processors/common_patterns.md` and `docs/processors/content_processing.md`.
+**Implemented**:
+
+1. ✅ Refactored all 6 processors to return result objects instead of mutating articles
+2. ✅ Normalizer uses `article.model_copy(update={...})` for immutable transformations
+3. ✅ Added dependency injection: RelevanceScorer accepts `quality_score`, Summarizer accepts `topics`
+4. ✅ Updated 182 processor tests to match new signatures
+5. ✅ Documented immutability contract in `common_patterns.md` and `content_processing.md`
+6. ✅ Updated individual processor docs with new inputs/outputs/signatures
+
+**Result Models**:
+
+- `ContentQualityResult`: quality scores + breakdown
+- `RelevanceResult`: relevance score + detailed breakdown + threshold status
+- `SummaryResult`: summary + key points + reasoning
+- Topic/Similarity processors return native Python types (`list[str]`, `list[ArticleGroup]`)
 
 #### Phase 1: Temporal Infrastructure
 
@@ -95,14 +96,15 @@ app/temporal/
 
 ### Success Criteria
 
-- Processor refactor complete: processors return new objects and pipeline handles metadata aggregation
-- Temporal scaffolding exists (`app/temporal/` package with shared helpers)
-- Activity `score_relevance_batch` exists in `app/temporal/activities/processing.py`
-- Activity passes 6+ integration tests covering happy path, idempotency, errors
-- Metadata fields (`relevance_score`, `relevance_breakdown`, `passes_relevance_threshold`) flow correctly
-- Idempotency verified: cache guard (`profile.id` + `article.url`) prevents redundant scoring
-- Documentation updated in 3 places (`temporal-workflows.md`, `content_processing.md`, `status_board.md`)
-- All existing tests still pass (`uv run pytest`)
+- ✅ Processor refactor complete: processors return new objects, no in-place mutations
+- ✅ All 182 processor tests passing
+- ✅ Documentation updated: `common_patterns.md`, `content_processing.md`, 4 processor docs
+- ❌ Temporal scaffolding exists (`app/temporal/` package with shared helpers)
+- ❌ Activity `score_relevance_batch` exists in `app/temporal/activities/processing.py`
+- ❌ Activity passes 6+ integration tests covering happy path, idempotency, errors
+- ❌ Metadata fields flow correctly through pipeline orchestrator
+- ❌ Idempotency verified: cache guard (`profile.id` + `article.url`) prevents redundant scoring
+- ❌ Documentation updated in remaining places (`temporal-workflows.md`, `status_board.md`)
 
 ### Out of Scope (Tracked Separately)
 

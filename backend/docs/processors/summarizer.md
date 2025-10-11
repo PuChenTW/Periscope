@@ -6,14 +6,21 @@
 
 ## Inputs
 
-- `Article` enriched with topics (`article.ai_topics`) and optional `article.summary` (for reuse).
+- `Article` with: `title`, `content`, `tags`.
+- `topics: list[str] | None` (optional dependency from TopicExtractor for enhanced context).
 - `SummarizationSettings`, `CustomPromptSettings`, `AIPromptValidationSettings`.
 - User preference: `summary_style` (`brief`, `detailed`, `bullet_points`).
+- Optional `custom_prompt: str` (user-defined prompt validated for safety).
 
 ## Outputs
 
-- `article.summary` populated with formatted text.
-- `article.metadata["summary_style"]` reflecting style used.
+Returns `SummaryResult` with:
+
+- `summary: str` (formatted summary text, style-specific)
+- `key_points: list[str]` (3-5 key takeaways from article)
+- `reasoning: str` (explanation of summarization approach)
+
+**Note**: Does not mutate input article. Accepts `topics` as parameter for dependency injection.
 
 ## Dependencies
 
@@ -24,11 +31,15 @@
 
 ## Algorithm
 
-1. Short-circuit: if content < `min_length_for_ai` (hard-coded), return excerpt without AI call.
-2. Build system + user prompts (style-specific) with title, topics, tags, key metadata.
-3. Call AI provider; validate output matches expected schema.
-4. On success, format summary according to style, store in article.
-5. On failure, log warning and fall back to first N characters (configurable) as excerpt.
+1. **Lazy initialization**: Validate and sanitize custom prompt on first use (`prepare()` method).
+2. **Short-circuit**: If content < 100 chars, return excerpt without AI call (returns `SummaryResult` with fallback).
+3. **Prompt building**: Construct prompt with title, tags, topics (from parameter or article.ai_topics), and truncated content.
+4. **AI call**: Invoke agent with style-specific system prompt + user preferences.
+5. **Formatting**: Apply style-specific formatting:
+   - `brief`/`detailed`: Return summary text as-is
+   - `bullet_points`: Format key_points as bullet list, prepend to summary
+6. **Error handling**: On AI failure, fall back to excerpt (first 300 chars) with error reasoning.
+7. Return `SummaryResult` with summary, key_points, and reasoning.
 
 ## Failure Modes
 
@@ -48,4 +59,5 @@
 
 ## Changelog
 
+- **2025-10-12**: Refactored to return `SummaryResult` and accept `topics` as parameter for dependency injection.
 - **2025-10-10**: Multi-style summarizer landed with AI fallback hierarchy.

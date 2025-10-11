@@ -258,8 +258,11 @@ class TestContentNormalizer:
         assert result.url == valid_article.url
         assert result.content == valid_article.content
         assert result.author == valid_article.author
-        assert result.published_at == valid_article.published_at
-        assert result.tags == valid_article.tags
+        # Compare datetime values (normalizer converts naive to UTC-aware)
+        assert result.published_at.replace(tzinfo=None) == valid_article.published_at.replace(tzinfo=None)
+        assert result.published_at.tzinfo == UTC  # Should be UTC-aware after normalization
+        # Tags are normalized to lowercase
+        assert result.tags == [tag.lower() for tag in valid_article.tags]
         assert result.summary == valid_article.summary
         assert result.ai_topics == valid_article.ai_topics
         # metadata will have quality_score added, so only check it contains original keys

@@ -6,13 +6,19 @@
 
 ## Inputs
 
-- `Article` from Normalizer with fields: `title`, `content`, `author`, `published_at`, `metadata`.
+- `Article` from Normalizer with fields: `title`, `content`, `author`, `published_at`, `tags`.
 - `ContentNormalizationSettings` (for limits) and injected AI provider.
 
 ## Outputs
 
-- Sets `article.metadata["quality_score"]`.
-- Stores breakdown under `article.metadata["quality_breakdown"]` (rule vs. AI components).
+Returns `ContentQualityResult` with:
+
+- `quality_score: int` (0-100, total quality)
+- `metadata_score: int` (0-50, rule-based metadata completeness)
+- `ai_content_score: int` (0-50, AI assessment of writing/informativeness/credibility)
+- `reasoning: str` (explanation of assessment)
+
+**Note**: Does not mutate input article. Pipeline orchestrator uses this result to enrich article metadata.
 
 ## Dependencies
 
@@ -21,10 +27,14 @@
 
 ## Hot Path
 
-1. Compute metadata score (author, publish date, tags, length bonuses).
-2. If AI enabled, call provider with truncated content to assess writing quality, informativeness, credibility.
-3. Combine scores (weighted 50/50), clamp 0–100, add to metadata.
-4. On repeated runs with same metadata, idempotently overwrite with same value.
+1. Compute metadata score (author, publish date, tags, length bonuses): 0-50 points.
+2. If AI enabled, call provider with truncated content (first 1500 chars) to assess:
+   - Writing quality (0-20): clarity, grammar, structure
+   - Informativeness (0-20): depth, coverage, value
+   - Credibility (0-10): sources, balance, professionalism
+3. Combine scores: `metadata_score + ai_content_score` (max 100).
+4. When AI disabled: scale metadata score to 0-100 range (`metadata_score * 2`).
+5. Return `ContentQualityResult` with breakdown for transparency.
 
 ## Failure Modes
 
@@ -43,4 +53,5 @@
 
 ## Changelog
 
+- **2025-10-12**: Refactored to return `ContentQualityResult` instead of mutating article metadata.
 - **2025-10-10**: Hybrid scoring (rule + AI) shipped with async support.

@@ -12,9 +12,18 @@
 
 ## Outputs
 
-- Returns normalized `Article` or `None` when the item should be dropped.
-- Mutates in place: trims `content`, fixes `title`/`author`, deduplicates `tags`, normalizes `url`, enforces UTC `published_at`.
-- Populates `article.metadata` with existing keys only; no new fields added yet.
+Returns normalized `Article` or `None` when the item should be dropped.
+
+**Normalization changes**:
+
+- `content`: Truncated at word boundary if exceeds `max_length`
+- `title`: Whitespace collapsed, truncated at word boundary, fallback to "Untitled Article"
+- `author`: Title-cased, truncated at word boundary
+- `tags`: Lowercased, deduplicated, length-limited, max count enforced
+- `url`: Tracking params removed, upgraded to HTTPS, returns `HttpUrl` type
+- `published_at`: Converted to UTC-aware datetime (falls back to `fetch_timestamp` if missing)
+
+**Immutability**: Returns new `Article` instances at each normalization step using `article.model_copy(update={...})`. Original article never mutated.
 
 ## Dependencies
 
@@ -56,4 +65,5 @@
 
 ## Changelog
 
+- **2025-10-12**: Refactored all helper methods to use `model_copy()` for immutability; added `HttpUrl` type preservation.
 - **2025-09-25**: Spam detection + metadata normalization hardened ahead of AI stages.

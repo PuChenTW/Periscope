@@ -6,11 +6,11 @@ fetcher provides, ensuring consistent data quality before AI processing.
 """
 
 import textwrap
-from datetime import UTC, datetime
+from datetime import UTC
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl
 
 from app.config import ContentNormalizationSettings, get_settings
 from app.processors.ai_provider import AIProvider, create_ai_provider
@@ -206,27 +206,25 @@ class ContentNormalizer:
             article: Article to normalize
 
         Returns:
-            Article with normalized UTC-aware published_at
+            New Article with normalized UTC-aware published_at
         """
         # published_at should never be None (handled by fetcher)
         if article.published_at is None:
             # This shouldn't happen, but if it does, log warning and use fetch_timestamp
             logger.warning(f"Article '{article.title[:50]}...' has None published_at, using fetch_timestamp")
-            article.published_at = article.fetch_timestamp
-            return article
+            return article.model_copy(update={"published_at": article.fetch_timestamp})
 
         # Handle naive datetime (no timezone info)
         if article.published_at.tzinfo is None:
             # Assume naive datetime is UTC and mark it as such
-            article.published_at = article.published_at.replace(tzinfo=UTC)
             logger.debug(f"Article '{article.title[:50]}...' has naive datetime, converting to UTC-aware")
-            return article
+            return article.model_copy(update={"published_at": article.published_at.replace(tzinfo=UTC)})
 
         # Handle aware datetime that's not in UTC
         if article.published_at.tzinfo != UTC:
             # Convert to UTC
-            article.published_at = article.published_at.astimezone(UTC)
             logger.debug(f"Article '{article.title[:50]}...' converted from {article.published_at.tzinfo} to UTC")
+            return article.model_copy(update={"published_at": article.published_at.astimezone(UTC)})
 
         return article
 
@@ -238,12 +236,11 @@ class ContentNormalizer:
             article: Article to normalize
 
         Returns:
-            Article with normalized title
+            New Article with normalized title
         """
         if not article.title or not article.title.strip():
-            article.title = "Untitled Article"
             logger.debug("Article has empty title, using fallback")
-            return article
+            return article.model_copy(update={"title": "Untitled Article"})
 
         # Clean up whitespace
         title = " ".join(article.title.split())
@@ -253,8 +250,7 @@ class ContentNormalizer:
             title = title[: self.title_max_length].rsplit(" ", 1)[0] + "..."
             logger.debug(f"Title truncated to {self.title_max_length} chars")
 
-        article.title = title
-        return article
+        return article.model_copy(update={"title": title})
 
     def _normalize_author(self, article: Article) -> Article:
         """
@@ -264,7 +260,7 @@ class ContentNormalizer:
             article: Article to normalize
 
         Returns:
-            Article with normalized author
+            New Article with normalized author
         """
         if not article.author or not article.author.strip():
             return article
@@ -278,8 +274,7 @@ class ContentNormalizer:
             author = author[: self.author_max_length].rsplit(" ", 1)[0] + "..."
             logger.debug(f"Author name truncated to {self.author_max_length} chars")
 
-        article.author = author
-        return article
+        return article.model_copy(update={"author": author})
 
     def _normalize_tags(self, article: Article) -> Article:
         """
@@ -289,7 +284,7 @@ class ContentNormalizer:
             article: Article to normalize
 
         Returns:
-            Article with normalized tags
+            New Article with normalized tags
         """
         if not article.tags:
             return article
@@ -317,8 +312,7 @@ class ContentNormalizer:
             if len(normalized_tags) >= self.max_tags_per_article:
                 break
 
-        article.tags = normalized_tags
-        return article
+        return article.model_copy(update={"tags": normalized_tags})
 
     def _normalize_url(self, article: Article) -> Article:
         """
@@ -328,7 +322,7 @@ class ContentNormalizer:
             article: Article to normalize
 
         Returns:
-            Article with normalized URL
+            New Article with normalized URL
         """
         url_str = str(article.url)
 
@@ -336,7 +330,6 @@ class ContentNormalizer:
         tracking_params = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "ref", "campaign"]
 
         # Parse URL and rebuild without tracking params
-
         parsed = urlparse(url_str)
 
         # Filter out tracking params
@@ -354,8 +347,7 @@ class ContentNormalizer:
         if url_str.startswith("http://"):
             url_str = "https://" + url_str[7:]
 
-        article.url = url_str  # type: ignore
-        return article
+        return article.model_copy(update={"url": HttpUrl(url_str)})
 
     def _enforce_content_length(self, article: Article) -> Article:
         """
@@ -365,7 +357,7 @@ class ContentNormalizer:
             article: Article to normalize
 
         Returns:
-            Article with content truncated if needed
+            New Article with content truncated if needed
         """
         if not article.content or len(article.content) <= self.content_max_length:
             return article
@@ -377,127 +369,6 @@ class ContentNormalizer:
         truncated = article.content[: self.content_max_length]
         truncated = truncated.rsplit(" ", 1)[0]
 
-        article.content = truncated
         logger.debug(f"Content truncated from {original_length} to {len(truncated)} chars")
 
-        return article
-
-
-if __name__ == "__main__":
-    import asyncio
-    from datetime import datetime
-
-    from pydantic import HttpUrl
-
-    from app.processors.fetchers.base import Article
-
-    async def test_normalizer():
-        """Test script to verify ContentNormalizer functionality with real AI."""
-        print("=" * 80)
-        print("ContentNormalizer Test Script")
-        print("=" * 80)
-
-        # Initialize normalizer with default settings
-        normalizer = ContentNormalizer()
-        print("\n✓ Initialized ContentNormalizer with AI-powered spam detection")
-
-        # Use current UTC time as fetch_timestamp for all tests
-        fetch_timestamp = datetime.now(UTC)
-
-        # Test 1: Valid article (should pass)
-        print("\n" + "-" * 80)
-        print("Test 1: Valid news article")
-        print("-" * 80)
-        valid_article = Article(
-            title="OpenAI Announces GPT-5 with Revolutionary Capabilities",
-            url=HttpUrl("https://example.com/article1"),
-            content=textwrap.dedent("""\
-                OpenAI has announced the release of GPT-5, their latest language model with groundbreaking
-                capabilities. The new model features improved reasoning, better context handling, and multimodal
-                understanding. Industry experts are calling it a significant leap forward in artificial
-                intelligence technology. The release comes after months of rigorous testing and safety evaluations.
-            """),
-            published_at=datetime(2024, 1, 15, 10, 0),
-            fetch_timestamp=fetch_timestamp,
-            author="Tech Reporter",
-            tags=["AI", "Technology"],
-        )
-
-        result = await normalizer.normalize(valid_article)
-        if result:
-            print(f"✓ Article ACCEPTED: '{result.title[:60]}...'")
-        else:
-            print(f"✗ Article REJECTED: '{valid_article.title[:60]}...'")
-
-        # Test 2: Spam article (should be rejected)
-        print("\n" + "-" * 80)
-        print("Test 2: Obvious spam content")
-        print("-" * 80)
-        spam_article = Article(
-            title="BUY NOW!!! AMAZING OFFER!!!",
-            url=HttpUrl("https://example.com/spam"),
-            content=textwrap.dedent("""\
-                BUY NOW!!! Don't miss this AMAZING offer!!! Click here for LIMITED TIME DEAL!!!
-                Act now and get 100% FREE with NO COST!!! WINNER WINNER WINNER!!!
-                Call now! Order now! Subscribe now! Sign up now! Earn money fast!!!
-                This is your chance to WIN BIG!!! Congratulations you are selected!!!
-            """),
-            published_at=datetime(2024, 1, 15, 10, 0),
-            fetch_timestamp=fetch_timestamp,
-        )
-
-        result = await normalizer.normalize(spam_article)
-        if result:
-            print(f"✗ Article ACCEPTED (should be rejected): '{spam_article.title[:60]}...'")
-        else:
-            print(f"✓ Article REJECTED (spam detected): '{spam_article.title[:60]}...'")
-
-        # Test 3: Article too short (should be rejected)
-        print("\n" + "-" * 80)
-        print("Test 3: Content too short")
-        print("-" * 80)
-        short_article = Article(
-            title="Short Article",
-            url=HttpUrl("https://example.com/short"),
-            content="This is too short.",
-            published_at=datetime(2024, 1, 15, 10, 0),
-            fetch_timestamp=fetch_timestamp,
-        )
-
-        result = await normalizer.normalize(short_article)
-        if result:
-            print(f"✗ Article ACCEPTED (should be rejected): '{short_article.title}'")
-        else:
-            print(f"✓ Article REJECTED (content too short): '{short_article.title}'")
-
-        # Test 4: Legitimate article with promotional elements (should pass)
-        print("\n" + "-" * 80)
-        print("Test 4: Legitimate product announcement")
-        print("-" * 80)
-        product_article = Article(
-            title="Apple Unveils New iPhone 16 with Advanced Features",
-            url=HttpUrl("https://example.com/apple"),
-            content=textwrap.dedent("""\
-                Apple today announced the iPhone 16, featuring a revolutionary new A18 chip and enhanced
-                camera system. The device will be available for pre-order starting next week at $999.
-                The new phone includes improved battery life, 5G connectivity, and advanced AI capabilities.
-                Industry analysts expect strong demand for the latest iteration of Apple's flagship product.
-            """),
-            published_at=datetime(2024, 1, 15, 10, 0),
-            fetch_timestamp=fetch_timestamp,
-            author="Apple Press",
-            tags=["Apple", "iPhone", "Technology"],
-        )
-
-        result = await normalizer.normalize(product_article)
-        if result:
-            print(f"✓ Article ACCEPTED: '{result.title[:60]}...'")
-        else:
-            print(f"✗ Article REJECTED: '{product_article.title[:60]}...'")
-
-        print("\n" + "=" * 80)
-        print("Test Complete!")
-        print("=" * 80)
-
-    # Run the async test
-    asyncio.run(test_normalizer())
+        return article.model_copy(update={"content": truncated})

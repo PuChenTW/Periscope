@@ -1,6 +1,6 @@
 # Personal Daily Reading Digest - Backend
 
-![Static Badge](https://img.shields.io/badge/test%20coverage-87%25-brightgreen)
+![Static Badge](https://img.shields.io/badge/test%20coverage-89%25-brightgreen)
 
 This is the Phase 1 MVP backend for the Personal Daily Reading Digest platform, built with FastAPI.
 

@@ -52,6 +52,15 @@ class RelevanceBreakdown(BaseModel):
     threshold_passed: bool = Field(description="Whether score exceeds threshold")
 
 
+class RelevanceResult(BaseModel):
+    """Complete relevance scoring result for an article."""
+
+    relevance_score: int = Field(ge=0, le=100, description="Final relevance score (0-100)")
+    breakdown: RelevanceBreakdown = Field(description="Detailed scoring breakdown")
+    passes_threshold: bool = Field(description="Whether article passes relevance threshold")
+    matched_keywords: list[str] = Field(default_factory=list, description="Matched interest keywords")
+
+
 class RelevanceScorer:
     """
     Scores article relevance to user interests using hybrid approach.
@@ -107,57 +116,48 @@ class RelevanceScorer:
             """),
         )
 
-    def _create_relevance_metadata(
+    async def score_article(
         self,
-        keyword_score: int,
-        semantic_score: float,
-        temporal_boost: int,
-        quality_boost: int,
-        final_score: int,
-        matched_keywords: list[str],
-        threshold_passed: bool,
-    ) -> dict:
-        """Create relevance metadata dictionary from scoring components."""
-        breakdown = RelevanceBreakdown(
-            keyword_score=keyword_score,
-            semantic_score=semantic_score,
-            temporal_boost=temporal_boost,
-            quality_boost=quality_boost,
-            final_score=final_score,
-            matched_keywords=matched_keywords,
-            threshold_passed=threshold_passed,
-        )
-        return {
-            "relevance_score": final_score,
-            "relevance_breakdown": breakdown.model_dump(),
-            "passes_relevance_threshold": threshold_passed,
-        }
-
-    async def score_article(self, article: Article, profile: InterestProfile) -> Article:
+        article: Article,
+        profile: InterestProfile,
+        quality_score: int | None = None,
+    ) -> RelevanceResult:
         """
-        Score article relevance to user profile and mutate article metadata.
+        Score article relevance to user profile.
 
         Args:
             article: Article to score
             profile: User interest profile
+            quality_score: Optional quality score from QualityScorer (used for quality boost)
 
         Returns:
-            Article with updated metadata containing relevance_score, relevance_breakdown,
-            and passes_relevance_threshold fields
+            RelevanceResult with scoring details
         """
         # Handle empty profile: score 0 but pass threshold (users without interests see content)
         if not profile.keywords:
             logger.debug("Empty interest profile, setting relevance score to 0 (threshold passed)")
-            article.metadata.update(self._create_relevance_metadata(0, 0.0, 0, 0, 0, [], True))
-            return article
+            breakdown = RelevanceBreakdown(
+                keyword_score=0,
+                semantic_score=0.0,
+                temporal_boost=0,
+                quality_boost=0,
+                final_score=0,
+                matched_keywords=[],
+                threshold_passed=True,
+            )
+            return RelevanceResult(
+                relevance_score=0,
+                breakdown=breakdown,
+                passes_threshold=True,
+                matched_keywords=[],
+            )
 
         # Check cache first
         cache_key = self._generate_cache_key(profile, article)
         cached_result = await self._get_cached_relevance(cache_key)
         if cached_result is not None:
             logger.debug(f"Cache hit for article: {article.title[:50]}...")
-            article.metadata.update(cached_result)
-            return article
+            return cached_result
 
         # Parse and normalize keywords
         keywords = normalize_term_list(profile.keywords, self.settings.max_keywords)
@@ -178,7 +178,7 @@ class RelevanceScorer:
 
         # Stage 3: Temporal & quality boost (0-10 points)
         temporal_boost = self._calculate_temporal_boost(article)
-        quality_boost = self._calculate_quality_boost(article, len(matched_keywords))
+        quality_boost = self._calculate_quality_boost(quality_score, len(matched_keywords))
 
         # Calculate final score with boost factor
         raw_score = keyword_score + semantic_score + temporal_boost + quality_boost
@@ -188,21 +188,26 @@ class RelevanceScorer:
         threshold = profile.relevance_threshold
         passes_threshold = final_score >= threshold
 
-        # Update article metadata
-        article.metadata.update(
-            self._create_relevance_metadata(
-                keyword_score,
-                semantic_score,
-                temporal_boost,
-                quality_boost,
-                final_score,
-                matched_keywords,
-                passes_threshold,
-            )
+        # Build result
+        breakdown = RelevanceBreakdown(
+            keyword_score=keyword_score,
+            semantic_score=semantic_score,
+            temporal_boost=temporal_boost,
+            quality_boost=quality_boost,
+            final_score=final_score,
+            matched_keywords=matched_keywords,
+            threshold_passed=passes_threshold,
+        )
+
+        result = RelevanceResult(
+            relevance_score=final_score,
+            breakdown=breakdown,
+            passes_threshold=passes_threshold,
+            matched_keywords=matched_keywords,
         )
 
         # Cache the result
-        await self._cache_relevance(cache_key, article.metadata)
+        await self._cache_relevance(cache_key, result)
 
         logger.debug(
             f"Scored article '{article.title[:50]}...': "
@@ -211,7 +216,7 @@ class RelevanceScorer:
             f"final={final_score} (threshold={threshold}, passes={passes_threshold})"
         )
 
-        return article
+        return result
 
     def _build_keyword_index(self, article: Article) -> dict[str, list[str]]:
         """
@@ -351,14 +356,14 @@ class RelevanceScorer:
         age_hours = (datetime.now(UTC) - article.published_at.replace(tzinfo=UTC)).total_seconds() / 3600
         return max(0, min(5, int(5 * (1 - age_hours / 24)))) if age_hours <= 24 else 0
 
-    def _calculate_quality_boost(self, article: Article, keyword_matches: int) -> int:
+    def _calculate_quality_boost(self, quality_score: int | None, keyword_matches: int) -> int:
         """
         Calculate quality boost for high-quality content.
 
         High quality articles (score >= 80) with at least one keyword match get +5 points.
 
         Args:
-            article: Article to evaluate
+            quality_score: Quality score from QualityScorer (0-100), or None if not available
             keyword_matches: Number of matched keywords
 
         Returns:
@@ -368,10 +373,8 @@ class RelevanceScorer:
         if keyword_matches == 0:
             return 0
 
-        # Check quality score in metadata
-        quality_score = article.metadata.get("quality_score", 0)
-
-        if quality_score >= 80:
+        # Check quality score
+        if quality_score is not None and quality_score >= 80:
             return 5
 
         return 0
@@ -393,7 +396,7 @@ class RelevanceScorer:
         # Use URL directly - it's unique per article and more debuggable than hashes
         return f"relevance:{profile.id}:{article.url}"
 
-    async def _get_cached_relevance(self, cache_key: str) -> dict | None:
+    async def _get_cached_relevance(self, cache_key: str) -> RelevanceResult | None:
         """
         Retrieve cached relevance result.
 
@@ -401,32 +404,27 @@ class RelevanceScorer:
             cache_key: Cache key
 
         Returns:
-            Cached metadata dict or None if not found
+            Cached RelevanceResult or None if not found
         """
         try:
             cached = await self.cache.get(cache_key)
             if cached:
-                return json.loads(cached)
+                data = json.loads(cached)
+                return RelevanceResult(**data)
         except Exception as e:
             logger.warning(f"Error retrieving cached relevance: {e}")
         return None
 
-    async def _cache_relevance(self, cache_key: str, metadata: dict) -> None:
+    async def _cache_relevance(self, cache_key: str, result: RelevanceResult) -> None:
         """
         Cache relevance result.
 
         Args:
             cache_key: Cache key
-            metadata: Article metadata containing relevance fields
+            result: RelevanceResult to cache
         """
         try:
             ttl_seconds = self.settings.cache_ttl_minutes * 60
-            # Cache only relevance-related fields
-            cache_data = {
-                "relevance_score": metadata.get("relevance_score"),
-                "relevance_breakdown": metadata.get("relevance_breakdown"),
-                "passes_relevance_threshold": metadata.get("passes_relevance_threshold"),
-            }
-            await self.cache.setex(cache_key, ttl_seconds, json.dumps(cache_data))
+            await self.cache.setex(cache_key, ttl_seconds, result.model_dump_json())
         except Exception as e:
             logger.warning(f"Error caching relevance result: {e}")

@@ -15,12 +15,21 @@ from app.processors.ai_provider import AIProvider, create_ai_provider
 from app.processors.fetchers.base import Article
 
 
-class ContentQualityResult(BaseModel):
-    """AI-powered content quality assessment result."""
+class AIContentQualityResult(BaseModel):
+    """AI-powered content quality assessment dimensions."""
 
     writing_quality: int = Field(description="Writing quality and coherence score (0-20)", ge=0, le=20)
     informativeness: int = Field(description="Informativeness and depth score (0-20)", ge=0, le=20)
     credibility: int = Field(description="Credibility and sourcing score (0-10)", ge=0, le=10)
+    reasoning: str = Field(description="Explanation of the quality assessment")
+
+
+class ContentQualityResult(BaseModel):
+    """Complete content quality assessment result."""
+
+    quality_score: int = Field(description="Total quality score (0-100)", ge=0, le=100)
+    metadata_score: int = Field(description="Metadata completeness score (0-50)", ge=0, le=50)
+    ai_content_score: int = Field(description="AI content quality score (0-50)", ge=0, le=50)
     reasoning: str = Field(description="Explanation of the quality assessment")
 
 
@@ -53,7 +62,7 @@ class QualityScorer:
 
         # Initialize PydanticAI agent for quality assessment
         self.quality_agent = provider.create_agent(
-            output_type=ContentQualityResult,
+            output_type=AIContentQualityResult,
             system_prompt=textwrap.dedent("""\
                 You are an expert at assessing content quality.
                 Your task is to evaluate article quality across three dimensions:
@@ -80,7 +89,7 @@ class QualityScorer:
             """),
         )
 
-    async def calculate_quality_score(self, article: Article) -> Article:
+    async def calculate_quality_score(self, article: Article) -> ContentQualityResult:
         """
         Calculate hybrid quality score combining rule-based and AI assessment.
 
@@ -88,33 +97,37 @@ class QualityScorer:
             article: Article to score
 
         Returns:
-            Article with quality_score in metadata
+            ContentQualityResult with quality scores and reasoning
         """
         # Calculate rule-based metadata score (0-50)
         metadata_score = self._calculate_metadata_score(article)
 
         # Calculate AI-powered content quality score (0-50) and combine
         ai_content_score = 0
+        reasoning = "Metadata-based scoring only"
+
         if self.quality_scoring_enabled:
             quality_result = await self._assess_content_quality(article)
             ai_content_score = (
                 quality_result.writing_quality + quality_result.informativeness + quality_result.credibility
             )
             quality_score = metadata_score + ai_content_score
+            reasoning = quality_result.reasoning
         else:
             # When AI scoring is disabled, scale metadata score to 0-100
             quality_score = metadata_score * 2
-
-        # Store in metadata
-        article.metadata["quality_score"] = quality_score
-        article.metadata["quality_breakdown"] = {"metadata_score": metadata_score, "ai_content_score": ai_content_score}
 
         logger.debug(
             f"Quality score for '{article.title[:50]}...': "
             f"total={quality_score}, metadata={metadata_score}, ai={ai_content_score}"
         )
 
-        return article
+        return ContentQualityResult(
+            quality_score=quality_score,
+            metadata_score=metadata_score,
+            ai_content_score=ai_content_score,
+            reasoning=reasoning,
+        )
 
     def _calculate_metadata_score(self, article: Article) -> int:
         """
@@ -156,7 +169,7 @@ class QualityScorer:
 
         return score
 
-    async def _assess_content_quality(self, article: Article) -> ContentQualityResult:
+    async def _assess_content_quality(self, article: Article) -> AIContentQualityResult:
         """
         Assess content quality using AI (0-50 points).
 
@@ -164,7 +177,7 @@ class QualityScorer:
             article: Article to assess
 
         Returns:
-            ContentQualityResult with scores for writing, informativeness, credibility
+            AIContentQualityResult with scores for writing, informativeness, credibility
         """
         # Truncate content to avoid token limits (use first 1500 chars for quality assessment)
         content = article.content[:1500] if article.content else ""
@@ -197,7 +210,7 @@ class QualityScorer:
         except Exception as e:
             logger.error(f"Error during AI quality assessment for article '{article.title[:50]}...': {e}")
             # On error, return neutral scores
-            return ContentQualityResult(
+            return AIContentQualityResult(
                 writing_quality=10,
                 informativeness=10,
                 credibility=5,

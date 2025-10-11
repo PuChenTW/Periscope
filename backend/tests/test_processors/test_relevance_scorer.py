@@ -121,8 +121,8 @@ class TestRelevanceScorer:
 
         result = await relevance_scorer.score_article(article, empty_profile)
 
-        assert result.metadata["relevance_score"] == 0
-        assert result.metadata["passes_relevance_threshold"] is True
+        assert result.relevance_score == 0
+        assert result.passes_threshold is True
 
     @pytest.mark.asyncio
     async def test_keyword_scoring_high_match_in_title(self, relevance_scorer, sample_profile, sample_article):
@@ -131,7 +131,7 @@ class TestRelevanceScorer:
         relevance_scorer.settings.enable_semantic_scoring = False
 
         result = await relevance_scorer.score_article(sample_article, sample_profile)
-        breakdown = RelevanceBreakdown(**result.metadata["relevance_breakdown"])
+        breakdown = result.breakdown
 
         assert breakdown.keyword_score >= 6
         assert "machine learning" in breakdown.matched_keywords or "python" in breakdown.matched_keywords
@@ -150,7 +150,7 @@ class TestRelevanceScorer:
         relevance_scorer.settings.enable_semantic_scoring = False
 
         result = await relevance_scorer.score_article(article, sample_profile)
-        breakdown = RelevanceBreakdown(**result.metadata["relevance_breakdown"])
+        breakdown = result.breakdown
 
         assert breakdown.keyword_score > 0
         assert len(breakdown.matched_keywords) > 0
@@ -170,7 +170,7 @@ class TestRelevanceScorer:
         relevance_scorer.settings.enable_semantic_scoring = False
 
         result = await relevance_scorer.score_article(article, sample_profile)
-        breakdown = RelevanceBreakdown(**result.metadata["relevance_breakdown"])
+        breakdown = result.breakdown
 
         assert breakdown.keyword_score >= 8
         assert "machine learning" in breakdown.matched_keywords or "ai" in breakdown.matched_keywords
@@ -214,7 +214,7 @@ class TestRelevanceScorer:
         with relevance_scorer.agent.override(model=test_model):
             result = await relevance_scorer.score_article(article_for_ai, test_profile)
 
-            breakdown = RelevanceBreakdown(**result.metadata["relevance_breakdown"])
+            breakdown = result.breakdown
 
             # Should include semantic score (keyword_score=20, triggers AI because 16 <= 20 < 55)
             assert breakdown.keyword_score == 20  # 5 tags x 4
@@ -238,7 +238,7 @@ class TestRelevanceScorer:
 
         result = await relevance_scorer.score_article(fresh_article, sample_profile)
 
-        breakdown = RelevanceBreakdown(**result.metadata["relevance_breakdown"])
+        breakdown = result.breakdown
 
         # Fresh article should get temporal boost (linear decay from 5 to 0 over 24h)
         assert breakdown.temporal_boost > 0
@@ -255,7 +255,7 @@ class TestRelevanceScorer:
 
         result = await relevance_scorer.score_article(sample_article, sample_profile)
 
-        breakdown = RelevanceBreakdown(**result.metadata["relevance_breakdown"])
+        breakdown = result.breakdown
 
         # Old article should get no temporal boost
         assert breakdown.temporal_boost == 0
@@ -267,9 +267,10 @@ class TestRelevanceScorer:
         relevance_scorer.cache.get.return_value = None
         relevance_scorer.settings.enable_semantic_scoring = False
 
-        result = await relevance_scorer.score_article(sample_article, sample_profile)
+        # Pass quality_score as parameter (no longer in article.metadata)
+        result = await relevance_scorer.score_article(sample_article, sample_profile, quality_score=85)
 
-        breakdown = RelevanceBreakdown(**result.metadata["relevance_breakdown"])
+        breakdown = result.breakdown
 
         # High quality with matches should get boost
         assert breakdown.quality_boost == 5
@@ -290,7 +291,7 @@ class TestRelevanceScorer:
 
         result = await relevance_scorer.score_article(article, sample_profile)
 
-        breakdown = RelevanceBreakdown(**result.metadata["relevance_breakdown"])
+        breakdown = result.breakdown
 
         # No keyword matches → no quality boost
         assert breakdown.quality_boost == 0
@@ -311,7 +312,7 @@ class TestRelevanceScorer:
 
         result = await relevance_scorer.score_article(sample_article, profile_with_boost)
 
-        breakdown = RelevanceBreakdown(**result.metadata["relevance_breakdown"])
+        breakdown = result.breakdown
 
         # Final score should be boosted
         raw_score = breakdown.keyword_score + breakdown.temporal_boost + breakdown.quality_boost
@@ -381,8 +382,8 @@ class TestRelevanceScorer:
         result = await relevance_scorer.score_article(strong_match_article, test_profile)
 
         # Article with many tag matches should easily pass threshold of 40
-        assert result.metadata["passes_relevance_threshold"] is True
-        assert result.metadata["relevance_score"] >= 40
+        assert result.passes_threshold is True
+        assert result.relevance_score >= 40
 
     @pytest.mark.asyncio
     async def test_threshold_fail(self, relevance_scorer, sample_article):
@@ -401,16 +402,16 @@ class TestRelevanceScorer:
         result = await relevance_scorer.score_article(sample_article, profile_no_match)
 
         # Article with no keyword matches should fail threshold
-        assert result.metadata["passes_relevance_threshold"] is False
+        assert result.passes_threshold is False
 
     @pytest.mark.asyncio
     async def test_cache_hit(self, relevance_scorer, sample_profile, sample_article):
         """Test cached results are used when available."""
-        # Mock cached result
+        # Mock cached result with correct RelevanceResult structure
         cached_data = json.dumps(
             {
                 "relevance_score": 75,
-                "relevance_breakdown": RelevanceBreakdown(
+                "breakdown": RelevanceBreakdown(
                     keyword_score=50,
                     semantic_score=20.0,
                     temporal_boost=3,
@@ -419,7 +420,8 @@ class TestRelevanceScorer:
                     matched_keywords=["ai", "machine learning"],
                     threshold_passed=True,
                 ).model_dump(),
-                "passes_relevance_threshold": True,
+                "passes_threshold": True,
+                "matched_keywords": ["ai", "machine learning"],
             }
         )
         relevance_scorer.cache.get.return_value = cached_data
@@ -427,8 +429,8 @@ class TestRelevanceScorer:
         result = await relevance_scorer.score_article(sample_article, sample_profile)
 
         # Should use cached result
-        assert result.metadata["relevance_score"] == 75
-        assert result.metadata["passes_relevance_threshold"] is True
+        assert result.relevance_score == 75
+        assert result.passes_threshold is True
 
         # Cache should be checked
         relevance_scorer.cache.get.assert_called_once()
@@ -465,11 +467,11 @@ class TestRelevanceScorer:
         relevance_scorer.agent.run = AsyncMock(side_effect=Exception("AI service error"))
 
         result = await relevance_scorer.score_article(article_for_ai, sample_profile)
-        breakdown = RelevanceBreakdown(**result.metadata["relevance_breakdown"])
+        breakdown = result.breakdown
 
         assert breakdown.keyword_score > 0
         assert breakdown.semantic_score == 0.0
-        assert "relevance_score" in result.metadata
+        assert result.relevance_score is not None
 
     def test_build_keyword_index(self, relevance_scorer, sample_article):
         """Test keyword index building."""
@@ -533,16 +535,13 @@ class TestRelevanceScorer:
         result = await relevance_scorer.score_article(sample_article, sample_profile)
 
         # Check all expected metadata fields present
-        assert "relevance_score" in result.metadata
-        assert "relevance_breakdown" in result.metadata
-        assert "passes_relevance_threshold" in result.metadata
 
         # Check breakdown structure
-        breakdown = result.metadata["relevance_breakdown"]
-        assert "keyword_score" in breakdown
-        assert "semantic_score" in breakdown
-        assert "temporal_boost" in breakdown
-        assert "quality_boost" in breakdown
-        assert "final_score" in breakdown
-        assert "matched_keywords" in breakdown
-        assert "threshold_passed" in breakdown
+        breakdown = result.breakdown
+        assert breakdown.keyword_score is not None
+        assert breakdown.semantic_score is not None
+        assert breakdown.temporal_boost is not None
+        assert breakdown.quality_boost is not None
+        assert breakdown.final_score is not None
+        assert breakdown.matched_keywords is not None
+        assert breakdown.threshold_passed is not None

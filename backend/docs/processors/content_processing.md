@@ -8,22 +8,28 @@
 
 ## Execution Order
 
-| Step | Module | Responsibility | Notes |
+| Step | Module | Responsibility | Returns |
 | --- | --- | --- | --- |
-| 1 | `app/processors/fetchers/` | Pull raw articles from RSS/Atom (future: blogs). | Uses `RSSFetcher`; emits `Article` objects with minimal metadata. |
-| 2 | `normalizer.py` | Validate content, sanitize HTML, normalize metadata. | Drops spam/invalid articles; no DB writes. |
-| 3 | `quality_scorer.py` | Attach `metadata["quality_score"]` (0–100). | Hybrid rule-based + AI; see dedicated doc. |
-| 4 | `topic_extractor.py` | Populate `article.ai_topics`. | Cached by article digest + settings. |
-| 5 | `relevance_scorer.py` | Score vs. user profile; flag threshold pass/fail. | Semantic step optional via settings. |
-| 6 | `summarizer.py` | Produce summary matching user style. | Falls back to excerpt on AI failure. |
-| 7 | `similarity_detector.py` | Group semantically similar articles. | Returns cluster ids for digest assembly. |
+| 1 | `app/processors/fetchers/` | Pull raw articles from RSS/Atom (future: blogs). | `list[Article]` with minimal metadata. |
+| 2 | `normalizer.py` | Validate content, sanitize HTML, normalize metadata. | `Article \| None` (drops spam/invalid). |
+| 3 | `quality_scorer.py` | Calculate quality score (0–100). | `ContentQualityResult` with metadata/AI breakdown. |
+| 4 | `topic_extractor.py` | Extract key topics from content. | `list[str]` of topics. |
+| 5 | `relevance_scorer.py` | Score vs. user profile; flag threshold pass/fail. | `RelevanceResult` with score/breakdown/threshold. |
+| 6 | `summarizer.py` | Produce summary matching user style. | `SummaryResult` with summary/key points/reasoning. |
+| 7 | `similarity_detector.py` | Group semantically similar articles. | `list[ArticleGroup]` for digest assembly. |
 
-Processors mutate the `Article` in-place and append diagnostic info to `article.metadata`.
+**Immutability Contract**: Processors return new result objects and never mutate input articles. The pipeline orchestrator (Temporal workflow) aggregates results into the final article metadata.
 
 ## Inputs & Outputs
 
 - **Input**: List of `Article` objects (post-fetch). Each article must include `url`, `title`, `content`, and `fetch_timestamp`; `published_at` is recommended for freshness scoring.
-- **Output**: List of processed `Article` objects + similarity cluster map consumed by digest assembly.
+- **Output**: Processor-specific result objects that the pipeline orchestrator uses to build enriched articles:
+  - `Normalizer`: Returns normalized `Article` copy (or `None` if rejected)
+  - `QualityScorer`: Returns `ContentQualityResult` with quality score and breakdown
+  - `TopicExtractor`: Returns `list[str]` of extracted topics
+  - `RelevanceScorer`: Returns `RelevanceResult` with relevance score, breakdown, threshold status
+  - `Summarizer`: Returns `SummaryResult` with summary, key points, reasoning
+  - `SimilarityDetector`: Returns `list[ArticleGroup]` for clustering
 - **Persistent side effects**: None. All state persists via Redis caches or downstream repositories.
 
 ## Dependencies
@@ -61,5 +67,6 @@ Defaults and overrides for these settings live in `backend/docs/configuration.md
 
 ## Changelog
 
+- **2025-10-12**: Phase 0 refactor complete - all processors now return immutable result objects; 182 tests passing.
 - **2025-10-10**: Pipeline (fetch → normalize → score → summarize → group) stabilized; 170 processor tests green.
 - **2025-09-25**: RSS fetcher shipped with retry + validation pipeline.
