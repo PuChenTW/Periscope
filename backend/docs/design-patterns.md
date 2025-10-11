@@ -5,6 +5,7 @@
 Clean separation between business logic and data access layers. Repositories handle all database operations while services contain business logic. This pattern allows for easier testing and maintains single responsibility principle.
 
 **Key Benefits:**
+
 - Business logic isolated from data access details
 - Easier to test services with mocked repositories
 - Single place to manage database queries
@@ -15,6 +16,7 @@ Clean separation between business logic and data access layers. Repositories han
 Use FastAPI's dependency injection system to manage service dependencies. Database sessions are injected through middleware, and services are composed using dependency providers. This promotes loose coupling and testability.
 
 **Key Benefits:**
+
 - Loose coupling between components
 - Easy to swap implementations (testing, different providers)
 - Clear dependency graphs
@@ -25,6 +27,7 @@ Use FastAPI's dependency injection system to manage service dependencies. Databa
 Custom ORM session middleware manages database sessions per request. Sessions are automatically created, managed, and cleaned up with proper error handling and rollback support. Dirty session detection prevents uncommitted changes.
 
 **Key Features:**
+
 - Per-request session lifecycle
 - Automatic commit on successful responses
 - Automatic rollback on exceptions
@@ -39,6 +42,7 @@ Implement hierarchical custom exceptions for different error types (business log
 For HTTP client operations, leverage native aiohttp exceptions (`ClientResponseError`, `TimeoutError`, `ClientError`) rather than custom wrapper exceptions to maintain simplicity and standard library compatibility.
 
 **Key Principles:**
+
 - Use standard library exceptions when appropriate
 - Create custom exceptions only for domain-specific errors
 - Centralized exception handling at API layer

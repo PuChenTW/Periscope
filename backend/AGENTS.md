@@ -12,7 +12,7 @@ This document provides comprehensive guidance for developing the backend systems
 - @docs/design-patterns.md - Repository pattern, dependency injection, error handling
 - @docs/database-design.md - SQLAlchemy models, schemas, ULID mixins, relationships
 - @docs/temporal-workflows.md - Workflows, activities, retries, fault tolerance
-- @docs/content-processing.md - RSS feeds, AI providers, similarity detection, summarization
+- @docs/processors/content_processing.md - RSS feeds, AI providers, similarity detection, summarization
 - @docs/configuration.md - Environment variables for all services (Database, Redis, AI, etc.)
 - @docs/testing-strategy.md - Test structure, fixtures, mocks, coverage targets
 - @docs/operations.md - Caching, monitoring, logging, security, performance
@@ -38,11 +38,13 @@ pytest
 **Prioritize functional programming unless object-oriented offers a significant advantage.**
 
 Prefer functional approaches with pure functions, immutability, and composition over class-based object-oriented patterns. Use OOP only when it provides clear benefits such as:
+
 - Complex stateful objects with encapsulated behavior
 - Framework requirements (SQLAlchemy models, Pydantic models)
 - Shared interfaces requiring polymorphism
 
 **Functional Style:**
+
 ```python
 # ✅ GOOD: Pure function with clear inputs/outputs
 def calculate_relevance_score(
@@ -62,6 +64,7 @@ def process_articles(articles: list[Article]) -> list[Article]:
 ```
 
 **When OOP Makes Sense:**
+
 ```python
 # ✅ GOOD: Framework-required models
 class User(SQLModel, ULIDMixin, TimestampMixin):
@@ -78,6 +81,7 @@ class ContentFetcher:
 ### String Formatting and Multi-line Text
 
 **Always use `textwrap.dedent()` for multi-line strings**, especially for:
+
 - AI prompts (system prompts, user prompts)
 - SQL queries
 - Error messages
@@ -87,6 +91,7 @@ class ContentFetcher:
 This ensures proper formatting and prevents indentation issues that can affect AI model performance or code readability.
 
 **Example - AI System Prompts:**
+
 ```python
 import textwrap
 from pydantic_ai import Agent
@@ -119,6 +124,7 @@ agent = provider.create_agent(
 ```
 
 **Example - User Prompts:**
+
 ```python
 # ✅ GOOD: Clean formatting with f-strings
 prompt = textwrap.dedent(f"""\
@@ -133,6 +139,7 @@ prompt = f"Article Title: {article.title}\nContent: {article.content}\n\nAnalyze
 ```
 
 **Why this matters:**
+
 - AI models perform better with well-formatted, structured prompts
 - Code is more readable and maintainable
 - Easier to update and modify prompts

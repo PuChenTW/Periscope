@@ -1,4 +1,5 @@
 # Personal Daily Reading Digest - Backend
+
 ![Static Badge](https://img.shields.io/badge/test%20coverage-87%25-brightgreen)
 
 This is the Phase 1 MVP backend for the Personal Daily Reading Digest platform, built with FastAPI.
@@ -6,6 +7,7 @@ This is the Phase 1 MVP backend for the Personal Daily Reading Digest platform, 
 ## Current Status
 
 **Completed Phase 1+ Features:**
+
 - Core FastAPI application structure
 - Database models with SQLAlchemy (PostgreSQL ready)
 - Memory-based caching layer (Redis-compatible interface)
@@ -38,7 +40,7 @@ This is the Phase 1 MVP backend for the Personal Daily Reading Digest platform, 
 
 ## Architecture
 
-```
+```text
 app/
    api/            # API endpoints and routes
    models/         # SQLAlchemy database models
@@ -59,6 +61,7 @@ app/
 ## Quick Start
 
 ### Prerequisites
+
 - Python 3.13+
 - Docker & Docker Compose
 - UV (Python package manager)
@@ -66,31 +69,36 @@ app/
 ### Development Setup
 
 1. **Clone and navigate to backend:**
+
    ```bash
    cd backend/
    ```
 
 2. **Install dependencies:**
+
    ```bash
    make install
    ```
 
 3. **Copy environment file:**
+
    ```bash
    cp .env.example .env
    # Edit .env with your configuration
    ```
 
 4. **Start development environment:**
+
    ```bash
    make dev
    ```
+
    This starts PostgreSQL in Docker and runs the FastAPI app locally with auto-reload.
 
 5. **Access the API:**
-   - API: http://localhost:8000
-   - Interactive docs: http://localhost:8000/docs
-   - Health check: http://localhost:8000/health
+   - API: <http://localhost:8000>
+   - Interactive docs: <http://localhost:8000/docs>
+   - Health check: <http://localhost:8000/health>
 
 ### Available Commands
 
@@ -108,16 +116,19 @@ make clean         # Clean temporary files
 ## API Endpoints
 
 ### Health & Monitoring
+
 - `GET /health/` - Basic health check
 - `GET /health/ready` - Readiness check (database + cache)
 
 ### Authentication (Mock)
+
 - `POST /auth/register` - User registration
 - `POST /auth/login` - User login
 - `POST /auth/verify-email` - Email verification
 - `POST /auth/forgot-password` - Password reset
 
 ### User Management (Mock)
+
 - `GET /users/me` - Get user profile
 - `PUT /users/me` - Update user profile
 - `GET /users/config` - Get digest configuration
@@ -127,6 +138,7 @@ make clean         # Clean temporary files
 - `PUT /users/interest-profile` - Update interest keywords
 
 ### Digest Operations (Mock)
+
 - `GET /digest/preview` - Preview digest content
 - `POST /digest/send-now` - Trigger immediate digest
 - `GET /digest/delivery-history` - Get delivery logs
@@ -135,6 +147,7 @@ make clean         # Clean temporary files
 ## Database Schema
 
 Key models implemented:
+
 - **User**: Authentication and profile data
 - **DigestConfiguration**: User delivery preferences
 - **ContentSource**: RSS feeds and blog URLs
@@ -155,13 +168,14 @@ value = await cache.get("key")
 
 **Easy Redis Migration**: Simply swap `MemoryCache` with `RedisCache` in Phase 2.
 
-## Testing
+## Testing Command
 
 ```bash
 make test  # Run all tests
 ```
 
 Current test coverage includes:
+
 - API endpoint functionality
 - Mock data validation
 - Basic integration tests
@@ -174,12 +188,14 @@ Current test coverage includes:
 ## Docker Setup
 
 ### Development
+
 ```bash
 docker compose up -d postgres  # PostgreSQL only
 # Run app locally with make dev
 ```
 
 ### Full Docker Environment
+
 ```bash
 docker compose up -d  # All services in containers
 ```
@@ -187,6 +203,7 @@ docker compose up -d  # All services in containers
 ## Next Phase (Phase 2)
 
 Phase 1+ provides complete content processing foundation. Phase 2 will add:
+
 - Business service layer implementation
 - AI-powered summarization and relevance scoring
 - Temporal workflow implementation for digest generation
@@ -196,6 +213,7 @@ Phase 1+ provides complete content processing foundation. Phase 2 will add:
 ## Environment Variables
 
 Key configuration options:
+
 ```bash
 DATABASE_URL=postgresql+asyncpg://user:pass@host:port/db
 SECRET_KEY=your-secret-key
@@ -224,8 +242,9 @@ TOPIC_EXTRACTION_MAX_TOPICS=5       # Maximum topics to extract per article
 ## API Documentation
 
 Interactive API documentation is available at:
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+
+- Swagger UI: <http://localhost:8000/docs>
+- ReDoc: <http://localhost:8000/redoc>
 
 All endpoints return JSON and include proper OpenAPI specifications with request/response models.
 
@@ -234,27 +253,33 @@ All endpoints return JSON and include proper OpenAPI specifications with request
 The content processing layer provides comprehensive RSS fetching, AI-powered analysis, and intelligent article grouping:
 
 ### RSS Feed Fetching
+
 - Support for RSS 2.0 and Atom 1.0 feeds
 - Simplified async HTTP client with retry logic and native aiohttp exception handling
 - HTML content cleaning and text normalization
 - Comprehensive test suite (73 tests)
 
 ### AI-Powered Processing
+
 **Topic Extraction Service:**
+
 - Identifies 3-5 key topics/themes from article content
 - Uses configurable AI providers (Gemini by default)
 - Stores topics in Article.ai_topics field for downstream processing
 - Graceful error handling with fallback to empty list
 
 **Similarity Detection & Grouping:**
+
 - Semantic analysis to detect similar articles from different sources
 - Connected components algorithm for efficient grouping
 - Aggregates topics from all articles in each group
 - Redis caching (24-hour TTL) to avoid redundant AI calls
 - Configurable similarity threshold (default: 0.7)
 
-### Testing
+### Testing Coverage
+
 Comprehensive test suite with ~149 total processor tests covering:
+
 - HTTP client, URL validation, and RSS parsing (73 tests)
 - Similarity detection and grouping logic (21 tests)
 - Topic extraction and content analysis (19 tests)

@@ -1,229 +1,129 @@
-# Configuration Management
+# Configuration Guide
 
-## Environment-based Configuration
+## Quick Start
 
-Use Pydantic BaseSettings for type-safe configuration management. All configuration is loaded from environment variables with support for .env files.
+- Load settings via `from app.config import get_settings`; cache the result, do not re-read env per call.
+- Environment variables use double underscores: `GROUP__FIELD` → `settings.group.field`.
+- Add a new variable? document it here, provide default, update `.env.example`.
 
-### Nested Configuration Structure
-
-The configuration uses nested Pydantic models with the `__` (double underscore) delimiter for environment variables. This provides better organization and type safety.
-
-**Example:**
 ```python
-# Access nested configuration in code
+from app.config import get_settings
+
 settings = get_settings()
-database_url = settings.database.url          # From DATABASE__URL
-ai_provider = settings.ai.provider            # From AI__PROVIDER
-threshold = settings.similarity.threshold     # From SIMILARITY__THRESHOLD
+database_url = settings.database.url          # DATABASE__URL
+ai_provider = settings.ai.provider            # AI__PROVIDER
+gemini_model = settings.ai.gemini_model       # AI__GEMINI_MODEL
 ```
 
-**Environment Variable Format:**
-- Use `__` (double underscore) to separate the group name from the field name
-- Example: `DATABASE__URL` maps to `settings.database.url`
-- Example: `AI__GEMINI_API_KEY` maps to `settings.ai.gemini_api_key`
-- Example: `SIMILARITY__THRESHOLD` maps to `settings.similarity.threshold`
+## Settings Groups
 
-## Configuration Categories
+| Group Attr | Env Prefix | Purpose |
+| --- | --- | --- |
+| `database` | `DATABASE__` | Postgres connection + options. |
+| `redis` | `REDIS__` | Redis cache connection + pool sizing. |
+| `cache` | `CACHE__` | Default cache TTLs. |
+| `email` | `EMAIL__` | SMTP / provider credentials. |
+| `ai` | `AI__` | Provider + model selection. |
+| `rss` | `RSS__` | Fetcher/network tuning. |
+| `similarity` | `SIMILARITY__` | Graph threshold + cache. |
+| `topic_extraction` | `TOPIC_EXTRACTION__` | Topic limits. |
+| `summarization` | `SUMMARIZATION__` | Summary length + truncation. |
+| `custom_prompt` | `CUSTOM_PROMPT__` | User prompt bounds. |
+| `ai_validation` | `AI_VALIDATION__` | Prompt validation controls. |
+| `content` | `CONTENT__` | Normalizer limits + spam toggles. |
+| `personalization` | `PERSONALIZATION__` | Relevance scoring weights. |
+| `security` | `SECURITY__` | JWT + auth secrets. |
 
-### Database Configuration
-Accessed via `settings.database.*`
-- `DATABASE__URL`: PostgreSQL connection string (required)
+## Required Variables
 
-### Redis Configuration
-Accessed via `settings.redis.*`
-- `REDIS__URL`: Redis connection URL (default: "redis://localhost:6379/0")
-- `REDIS__MAX_CONNECTIONS`: Maximum connection pool size (default: 10)
+| Setting | Default | Why |
+| --- | --- | --- |
+| `DATABASE__URL` | — | Without it the app refuses to boot. |
+| `SECURITY__SECRET_KEY` | — | JWT signing. |
+| `EMAIL__PROVIDER` | `smtp` | Required even if mocked; controls email strategy. |
 
-### Cache Configuration
-Accessed via `settings.cache.*`
-- `CACHE__TTL_MINUTES`: Cache TTL in minutes (default: 60)
+## Database & Cache
 
-### Email Provider Configuration
-Accessed via `settings.email.*`
-- `EMAIL__PROVIDER`: Provider name - smtp, sendgrid, ses (default: "smtp")
-- `EMAIL__API_KEY`: Provider API key (default: "")
-- `EMAIL__SMTP_HOST`: SMTP server host (default: "localhost")
-- `EMAIL__SMTP_PORT`: SMTP server port (default: 587)
-- `EMAIL__SMTP_USERNAME`: SMTP authentication username (default: "")
-- `EMAIL__SMTP_PASSWORD`: SMTP authentication password (default: "")
+| Setting | Default | Purpose / Notes |
+| --- | --- | --- |
+| `DATABASE__URL` | (none) | Full SQLAlchemy URL; include `?sslmode=` for cloud envs. |
+| `REDIS__URL` | `redis://localhost:6379/0` | Shared cache + processor memoization. |
+| `REDIS__MAX_CONNECTIONS` | `10` | Tune up only after profiling. |
+| `CACHE__TTL_MINUTES` | `60` | Baseline TTL for generic cache helpers. |
 
-### AI Provider Settings
-Accessed via `settings.ai.*`
-- `AI__PROVIDER`: Provider selection - gemini, openai, anthropic, etc. (default: "gemini")
-- `AI__GEMINI_API_KEY`: Google Gemini API key (default: "")
-- `AI__GEMINI_MODEL`: Model name (default: "gemini-2.5-flash-lite")
-- `AI__OPENAI_API_KEY`: OpenAI API key (default: "")
-- `AI__OPENAI_MODEL`: OpenAI model name (default: "gpt-5-nano")
+## Email
 
-### RSS Fetcher Configuration
-Accessed via `settings.rss.*`
-- `RSS__FETCH_TIMEOUT`: Fetch timeout in seconds (default: 30)
-- `RSS__MAX_RETRIES`: Maximum retry attempts (default: 3)
-- `RSS__RETRY_DELAY`: Delay between retries in seconds (default: 1.0)
-- `RSS__MAX_ARTICLES_PER_FEED`: Maximum articles per feed (default: 100)
-- `RSS__USER_AGENT`: User agent string (default: "Periscope-Bot/1.0 (+https://periscope.ai/bot)")
+| Setting | Default | Notes |
+| --- | --- | --- |
+| `EMAIL__PROVIDER` | `smtp` | Supported: `smtp`, `sendgrid`, `ses`. |
+| `EMAIL__API_KEY` | `""` | Required for non-SMTP providers. |
+| `EMAIL__SMTP_HOST` | `localhost` | Only used when provider=`smtp`. |
+| `EMAIL__SMTP_PORT` | `587` | Must match infra; prefer STARTTLS. |
+| `EMAIL__SMTP_USERNAME` | `""` | Leave blank for unauthenticated local dev. |
+| `EMAIL__SMTP_PASSWORD` | `""` | Never log this. |
 
-### Similarity Detection Configuration
-Accessed via `settings.similarity.*`
-- `SIMILARITY__THRESHOLD`: Minimum confidence score for similarity (default: 0.7, range: 0.0-1.0)
-- `SIMILARITY__CACHE_TTL_MINUTES`: Cache duration for similarity results (default: 1440 = 24 hours)
-- `SIMILARITY__BATCH_SIZE`: Maximum article pairs to compare (default: 10)
+## AI & Fetching
 
-### Topic Extraction Configuration
-Accessed via `settings.topic_extraction.*`
-- `TOPIC_EXTRACTION__MAX_TOPICS`: Maximum topics per article (default: 5, range: 1-10)
+| Setting | Default | Notes |
+| --- | --- | --- |
+| `AI__PROVIDER` | `gemini` | Wire to provider factory; see `processors/ai_provider.py`. |
+| `AI__GEMINI_API_KEY` | `""` | Required when provider=`gemini`. |
+| `AI__GEMINI_MODEL` | `gemini-2.5-flash-lite` | Override to control latency/cost. |
+| `AI__OPENAI_API_KEY` | `""` | Placeholder for future. |
+| `AI__OPENAI_MODEL` | `gpt-5-nano` | Placeholder. |
+| `RSS__FETCH_TIMEOUT` | `30` | Seconds per request. |
+| `RSS__MAX_RETRIES` | `3` | Applied with fixed backoff (`RSS__RETRY_DELAY`). |
+| `RSS__RETRY_DELAY` | `1.0` | Seconds between retries. |
+| `RSS__MAX_ARTICLES_PER_FEED` | `100` | Hard cap to protect memory. |
+| `RSS__USER_AGENT` | `Periscope-Bot/1.0 (+https://periscope.ai/bot)` | Respect robots.txt. |
 
-### Summarization Configuration
-Accessed via `settings.summarization.*`
-- `SUMMARIZATION__MAX_LENGTH`: Maximum words in summary (default: 500)
-- `SUMMARIZATION__CONTENT_LENGTH`: Maximum content chars sent to AI for summarization (default: 2000)
+## Processor Settings Snapshot
 
-### Custom Prompt Validation Configuration
-Accessed via `settings.custom_prompt.*`
-- `CUSTOM_PROMPT__MAX_LENGTH`: Maximum prompt length (default: 1000)
-- `CUSTOM_PROMPT__MIN_LENGTH`: Minimum prompt length (default: 10)
-- `CUSTOM_PROMPT__VALIDATION_ENABLED`: Enable prompt validation (default: true)
+| Processor | Settings Object | Key Fields |
+| --- | --- | --- |
+| SimilarityDetector | `SimilaritySettings` | `threshold`, `cache_ttl_minutes`, `batch_size`. |
+| TopicExtractor | `TopicExtractionSettings` | `max_topics`. |
+| Summarizer | `SummarizationSettings` | `max_length`, `content_length`. |
+| Custom Prompt Validator | `CustomPromptSettings` | `min_length`, `max_length`, `validation_enabled`. |
+| AI Prompt Validation | `AIPromptValidationSettings` | `enabled`, `threshold`, `cache_ttl_minutes`. |
+| ContentNormalizer | `ContentNormalizationSettings` | Content length bounds, spam toggle, tag limits. |
+| QualityScorer | `ContentNormalizationSettings.quality_scoring_enabled` | Toggles AI path. |
+| RelevanceScorer | `PersonalizationSettings` | Keyword weights, relevance threshold, boost factor, cache ttl, semantic toggle. |
 
-### AI Prompt Validation Configuration
-Accessed via `settings.ai_validation.*`
-- `AI_VALIDATION__ENABLED`: Enable AI-powered validation (default: true)
-- `AI_VALIDATION__THRESHOLD`: Minimum confidence score (default: 0.8)
-- `AI_VALIDATION__CACHE_TTL_MINUTES`: Cache duration (default: 1440)
+Each processor receives **only** the settings object it needs. Pass custom instances in tests to avoid loading the full settings tree.
 
-### Content Normalization Configuration
-Accessed via `settings.content.*`
-- `CONTENT__MIN_LENGTH`: Minimum content length (default: 100)
-- `CONTENT__MAX_LENGTH`: Maximum content length (default: 50000)
-- `CONTENT__SPAM_DETECTION_ENABLED`: Enable spam detection (default: true)
-- `CONTENT__TITLE_MAX_LENGTH`: Maximum title length (default: 500)
-- `CONTENT__AUTHOR_MAX_LENGTH`: Maximum author length (default: 100)
-- `CONTENT__TAG_MAX_LENGTH`: Maximum tag length (default: 50)
-- `CONTENT__MAX_TAGS_PER_ARTICLE`: Maximum tags per article (default: 20)
-- `CONTENT__QUALITY_SCORING_ENABLED`: Enable quality scoring (default: true)
+## Personalization Extras
 
-### Personalization Configuration
-Accessed via `settings.personalization.*`
-- `PERSONALIZATION__KEYWORD_WEIGHT_TITLE`: Weight for title keyword matches (default: 3)
-- `PERSONALIZATION__KEYWORD_WEIGHT_CONTENT`: Weight for content keyword matches (default: 2)
-- `PERSONALIZATION__KEYWORD_WEIGHT_TAGS`: Weight for tag/topic keyword matches (default: 4)
-- `PERSONALIZATION__MAX_KEYWORDS`: Maximum keywords per interest profile (default: 50)
-- `PERSONALIZATION__RELEVANCE_THRESHOLD_DEFAULT`: Default relevance threshold for filtering (default: 40, range: 0-100)
-- `PERSONALIZATION__BOOST_FACTOR_DEFAULT`: Default boost factor multiplier (default: 1.0)
-- `PERSONALIZATION__CACHE_TTL_MINUTES`: Cache duration for relevance results (default: 720 = 12 hours)
-- `PERSONALIZATION__ENABLE_SEMANTIC_SCORING`: Enable AI semantic scoring (default: true)
+| Setting | Default | Behaviour |
+| --- | --- | --- |
+| `PERSONALIZATION__KEYWORD_WEIGHT_TITLE` | `3` | Title match weight. |
+| `PERSONALIZATION__KEYWORD_WEIGHT_CONTENT` | `2` | Body match weight. |
+| `PERSONALIZATION__KEYWORD_WEIGHT_TAGS` | `4` | Tag/topic match weight. |
+| `PERSONALIZATION__MAX_KEYWORDS` | `50` | Enforced on profile save. |
+| `PERSONALIZATION__RELEVANCE_THRESHOLD_DEFAULT` | `40` | Fallback threshold when profile unset. |
+| `PERSONALIZATION__BOOST_FACTOR_DEFAULT` | `1.0` | Multiplier applied post-score; clamp 0.5–2.0. |
+| `PERSONALIZATION__CACHE_TTL_MINUTES` | `720` | Redis memoization for `(profile, article)` pairs. |
+| `PERSONALIZATION__ENABLE_SEMANTIC_SCORING` | `true` | Gates AI semantic lift stage. |
 
-## Processor Settings Architecture
+## Override Order
 
-### Design Principle
-
-Each processor class accepts only the specific settings it needs rather than the full Settings object. This architectural pattern provides:
-
-**Clear Dependencies:**
-Easy to see what configuration each processor requires. Dependencies are explicit in constructor signatures.
-
-**Better Testability:**
-Test with minimal settings objects containing only relevant configuration. No need to create full Settings objects for testing individual processors.
-
-**Loose Coupling:**
-Processors don't depend on unrelated configuration. Changes to unrelated settings don't affect processor initialization.
-
-**Type Safety:**
-Specific settings types prevent configuration errors at compile time. Wrong settings type causes immediate type checking failures.
-
-### Settings Groups
-
-**SimilaritySettings:**
-Configuration for similarity detection and grouping engine. Controls threshold for similarity matching, cache duration for results, and batch size for comparison operations.
-
-**TopicExtractionSettings:**
-Configuration for topic extraction service. Controls maximum number of topics extracted per article.
-
-**SummarizationSettings:**
-Configuration for summary generation. Controls maximum summary length and content truncation for AI processing.
-
-**CustomPromptSettings:**
-Configuration for user-defined custom prompts. Controls prompt length limits and validation rules.
-
-**AIPromptValidationSettings:**
-Configuration for AI-powered prompt validation. Controls whether AI validation is enabled, confidence thresholds, and cache duration.
-
-**ContentNormalizationSettings:**
-Comprehensive configuration for content validation, spam detection, and quality scoring. Groups all content normalization and quality rules in a single settings object.
-
-**PersonalizationSettings:**
-Configuration for relevance scoring and personalization. Controls keyword weighting, relevance thresholds, boost factors, cache duration, and semantic scoring toggle.
-
-### Dependency Injection Pattern
-
-Processors accept settings via constructor parameters with sensible defaults from global configuration. This allows:
-
-**Production Usage:**
-Processors use global settings from environment variables via `get_settings()`. No explicit settings passing required in production code.
-
-**Testing Flexibility:**
-Tests can create custom settings objects with specific values for test scenarios. Easy to test edge cases and specific configurations.
-
-**Optional Override:**
-Settings parameters default to None and fallback to `get_settings().<group>`. Explicit settings can be passed when needed without changing default behavior.
-
-### Security Configuration
-Accessed via `settings.security.*`
-- `SECURITY__SECRET_KEY`: Secret key for JWT token signing (required)
-- `SECURITY__JWT_EXPIRE_MINUTES`: JWT token expiration in minutes (default: 30)
-
-### Application Configuration
-- `APP_NAME`: Application name (default: "Personal Daily Reading Digest")
-- `APP_VERSION`: Application version
-- `APP_ENV`: Environment (development, staging, production)
-- `DEBUG`: Debug mode flag (default: false)
-- `LOG_LEVEL`: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-- `CORS_ORIGINS`: Allowed CORS origins (comma-separated)
-
-### Rate Limiting Configuration
-- `RATE_LIMIT_ENABLED`: Enable rate limiting (default: true)
-- `RATE_LIMIT_PER_MINUTE`: Requests per minute per user (default: 60)
-- `RATE_LIMIT_BURST`: Burst allowance (default: 10)
-
-## Configuration Loading
-
-### Priority Order
 1. Environment variables
-2. `.env` file in project root
-3. `.env.local` file (gitignored, for local overrides)
-4. Default values in code
+2. `.env` (committed template)
+3. `.env.local` (ignored; personal overrides)
+4. Defaults in `config.py`
 
-### Development Configuration
-- Use `.env.development` for development-specific settings
-- Override with `.env.local` for personal development settings
-- Never commit `.env.local` to version control
+Production must use environment variables only. Secrets belong in your secrets manager, not `.env`.
 
-### Production Configuration
-- All configuration via environment variables
-- No `.env` files in production
-- Use secrets management for sensitive values
-- Validate all required settings on startup
+## Validation Rules
 
-## Configuration Validation
+- Application fails fast on missing required settings; do not guard with try/except.
+- Numeric fields validated for range (see dataclasses in `config.py`).
+- Add tests in `tests/unit/config` when introducing new constraints.
 
-### Startup Validation
-- All required configuration checked at application startup
-- Invalid configuration causes immediate failure with clear error messages
-- Type validation via Pydantic ensures correct types
-- Range validation for numeric values
+## Checklist for New Settings
 
-### Configuration Testing
-- Separate test configuration with test-specific values
-- Use environment variable overrides in tests
-- Mock external service configurations
-- Test configuration loading and validation logic
-
-## Best Practices
-
-1. **Never hardcode secrets**: Always use environment variables
-2. **Document all settings**: Include in this file with defaults and descriptions
-3. **Validate on startup**: Fail fast with clear error messages
-4. **Use type hints**: Pydantic ensures type safety
-5. **Provide sensible defaults**: Make development setup easy
-6. **Namespace Redis keys**: Prevent conflicts in shared Redis instances
-7. **Use descriptive names**: Clear, self-documenting variable names
-8. **Group related settings**: Organize by component or feature
+- [ ] Add type + default to `app/config.py`.
+- [ ] Document in this file (table + notes).
+- [ ] Update `.env.example`.
+- [ ] Ensure related processor doc references the new setting.
+- [ ] Provide migration plan if required in deployment scripts.

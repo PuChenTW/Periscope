@@ -1,143 +1,50 @@
-# Temporal Workflow Design Patterns
+# Temporal Workflow Playbook
 
-## 1. Workflow Composition
+## Non-Negotiables
 
-Break complex workflows into smaller, reusable child workflows. Use workflow orchestration to coordinate multiple sub-workflows for configuration fetching, content processing, and email delivery. This enables better fault isolation and reusability.
+- **Idempotent activities**: check existing state before writes; safe to replay after retry.
+- **Deterministic inputs**: no random/time-based decisions inside workflows; pass timestamps from activities.
+- **Tight timeouts**: every activity declares a timeout class (fast/medium/long) in code + table below.
+- **Structured errors**: raise domain errors (`ExternalServiceError`, `ValidationError`) so retry policies can react.
 
-**Key Principles:**
-- Each workflow has a single, clear responsibility
-- Child workflows can be tested independently
-- Parent workflows orchestrate child workflow execution
-- Enables parallel execution of independent workflows
-- Better fault isolation and recovery
+## Core Workflows
 
-**Benefits:**
-- Improved maintainability
-- Reusable workflow components
-- Better testing granularity
-- Clearer workflow visualization in Temporal UI
+| Workflow | Purpose | Key Activities | Notes |
+| --- | --- | --- | --- |
+| `daily_digest` | Orchestrate daily content → email. | `fetch_user_config`, `fetch_sources_parallel`, `process_articles`, `assemble_digest`, `send_email`, `record_delivery`. | Must deliver even if subset of sources fail; log partial failures. |
+| `user_onboarding` | Validate new user config + email verification. | `validate_sources`, `send_verification_email`, `await_verification`, `activate_user`. | `await_verification` uses Temporal signals; hard timeout 48h. |
+| `source_validation` | Asynchronous source health checks. | `fetch_source_probe`, `update_validation_status`. | Triggered on demand or via cron schedule. |
 
-## 2. Activity Design Rules
+## Activity Matrix
 
-Activities are the building blocks of workflows. They represent external interactions and should follow these principles:
+| Activity | Owner Module | Timeout Class | Retries | Idempotency Check |
+| --- | --- | --- | --- | --- |
+| `fetch_user_config` | `app/services/content.py` | Fast (<5s) | 3 attempts, backoff 2s → 10s | Single DB read; no side effects. |
+| `fetch_sources_parallel` | `app/temporal/activities/content.py` | Medium (30s) | 3 attempts, backoff 5s → 30s | Cache raw fetch results keyed by source ULID. |
+| `normalize_articles` | `app/temporal/activities/processing.py` | Medium (30s) | 3 attempts, backoff 5s → 45s | Reuses cached processor outputs via Redis digest. |
+| `score_relevance` | `app/temporal/activities/processing.py` | Medium (30s) | 2 attempts, backoff 10s → 40s | Skip if `article.metadata.relevance_score` exists with same digest. |
+| `summarize_articles` | `app/temporal/activities/processing.py` | Long (120s) | 2 attempts, backoff 15s → 120s | Uses AI cache; stores neutral summary on failure. |
+| `assemble_digest` | `app/services/digest.py` | Fast | 1 attempt (no retry) | Pure data shaping. |
+| `send_email` | `app/temporal/activities/email.py` | Medium | 4 attempts, backoff 10s → 2m | Email provider idempotency key = digest ULID + attempt. |
+| `record_delivery` | `app/temporal/activities/status.py` | Fast | 3 attempts | UPSERT on delivery status table keyed by (user_id, delivery_date). |
 
-### Idempotent
-Safe to retry without side effects. Activities should produce the same result when called multiple times with the same input.
+_Timeout classes align with `temporalio.activity.ActivityOptions` declared in code. Update both table and code together._
 
-**Implementation Guidelines:**
-- Check state before making changes
-- Use unique identifiers for operations
-- Design APIs to be naturally idempotent
-- Handle duplicate operations gracefully
+## Retry & Failure Policy
 
-### Deterministic
-Same input produces same output. Activities should not have random behavior or depend on external state that can change between retries.
+- Use exponential backoff with jitter disabled (determinism). Cap retry attempts per table above.
+- Mark errors from external providers as retryable; mark validation errors as non-retryable.
+- Always emit a workflow metric (`workflow.failure_reason`) before propagating fatal errors.
+- For partial failures (e.g., some sources dead), record the issue in delivery metadata and continue.
 
-**Implementation Guidelines:**
-- Avoid random number generation
-- Use consistent timestamp sources
-- No side effects that persist across retries
-- Predictable error handling
+## Integration Checklist
 
-### Single Responsibility
-One clear purpose per activity. Each activity should do one thing well.
+- Adding an activity? Append it to the matrix, define timeout/retry in code, and document cache keys in `operations.md`.
+- Introducing a new workflow? Provide purpose + activity list here, add monitoring entry in `operations.md`, and wire schedule/trigger.
+- Changing processor order? Reflect in `daily_digest` row and ensure corresponding processor docs highlight dependency.
 
-**Implementation Guidelines:**
-- Name activities clearly after their purpose
-- Keep activities focused and small
-- Avoid mixing concerns (e.g., fetch and process)
-- Compose complex operations from multiple activities
+## Debugging Tips
 
-### Timeout Aware
-Always set appropriate timeouts for different activity types.
-
-**Timeout Categories:**
-- **Fast operations** (< 5s): Database queries, cache lookups
-- **Medium operations** (5-30s): Single HTTP requests with retries
-- **Long operations** (30s-5m): Content processing, AI operations
-- **Very long operations** (> 5m): Batch processing, large data transfers
-
-## 3. Error Handling Strategies
-
-Temporal provides powerful error handling and retry mechanisms. Design workflows to leverage these capabilities.
-
-### Retry Policies with Exponential Backoff
-Implement proper retry policies for transient failures.
-
-**Configuration:**
-- **Initial interval**: Start with 1-5 seconds
-- **Backoff coefficient**: 2.0 for exponential growth
-- **Maximum interval**: Cap at 60 seconds
-- **Maximum attempts**: 3-5 for most operations
-- **Non-retryable errors**: Configure errors that should not retry
-
-### Fallback Processing
-Design workflows to gracefully degrade rather than completely fail.
-
-**Strategies:**
-- **Partial results**: Process successful sources even if some fail
-- **Default values**: Use sensible defaults when data unavailable
-- **Skip and continue**: Log failures but continue workflow
-- **Notification**: Alert on partial failures while still delivering
-
-### Graceful Degradation
-Ensure digest delivery even with reduced content.
-
-**Implementation:**
-- Always deliver digest unless catastrophic failure
-- Include partial content with clear indicators
-- Prioritize successful sources
-- Include error summary for failed sources
-- Maintain delivery schedule consistency
-
-## Workflow Examples
-
-### Daily Digest Workflow
-Main workflow orchestrating the entire digest generation process.
-
-**Steps:**
-1. Fetch user configuration and preferences
-2. Fetch content from all sources in parallel
-3. Process content (similarity detection, topic extraction)
-4. Generate summaries and personalize
-5. Assemble digest email
-6. Send with retry logic
-7. Update delivery status
-
-**Error Handling:**
-- Individual source failures don't block workflow
-- Content processing errors fall back to raw content
-- Email delivery has independent retry policy
-- All steps log detailed progress
-
-### User Onboarding Workflow
-Validates user configuration and sources during signup.
-
-**Steps:**
-1. Validate email format and domain
-2. Validate all configured sources
-3. Send verification email
-4. Wait for email confirmation (with timeout)
-5. Activate user account
-
-**Error Handling:**
-- Source validation failures provide specific feedback
-- Email delivery failures trigger re-send
-- Timeout on verification triggers reminder
-- Failed validation prevents activation
-
-### Source Validation Workflow
-Lightweight availability checks for content sources.
-
-**Steps:**
-1. Fetch source URL with timeout
-2. Validate response format
-3. Parse sample content
-4. Update validation status
-5. Store validation timestamp
-
-**Error Handling:**
-- Network errors mark source as temporarily unavailable
-- Parse errors mark source as invalid
-- Timeout errors trigger later retry
-- Success updates last validated timestamp
+- Temporal UI: filter by workflow type; inspect activity history for retry counts.
+- Logging: every activity should log start + end with correlation ID (`workflow_id/activity_name`).
+- Replay issues usually mean non-deterministic code—check for datetime.now(), random, or unordered iteration in workflow functions.
