@@ -48,4 +48,5 @@ dev = [
     "pytest-xdist>=3.8.0",
     "python-on-whales>=0.78.0",
     "fakeredis>=2.31.3",
+    "pytest-timeout>=2.4.0",
 ]

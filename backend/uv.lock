@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.13"
 
 [[package]]
@@ -1566,6 +1566,7 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "pytest-mock-resources" },
+    { name = "pytest-timeout" },
     { name = "pytest-xdist" },
     { name = "python-on-whales" },
     { name = "ruff" },
@@ -1606,6 +1607,7 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=1.2.0" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "pytest-mock-resources", specifier = ">=2.12.4" },
+    { name = "pytest-timeout", specifier = ">=2.4.0" },
     { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "python-on-whales", specifier = ">=0.78.0" },
     { name = "ruff", specifier = ">=0.13.0" },
@@ -2010,6 +2012,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c5/9a/6ca1cc045dd45a2c0793b8d997e649a7e06c805a98a1d50ab1dab1aa3c4d/pytest_mock_resources-2.12.4.tar.gz", hash = "sha256:f3734b2f1eb851bc3c44375bd1fccc1571770a190ad16f1efa7655f436be2bf3", size = 41959, upload-time = "2025-09-17T18:32:53.204Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/75/ce/8ec6e58bd916f215b45ab8c1f4f99d3a2470ff7dfb63b70bc8026ce5740e/pytest_mock_resources-2.12.4-py3-none-any.whl", hash = "sha256:9e737cdf9e67b7ce1b9b1da0373b377339b65d206ef5e1237ac8591934429e7e", size = 58849, upload-time = "2025-09-17T18:32:51.695Z" },
+]
+
+[[package]]
+name = "pytest-timeout"
+version = "2.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ac/82/4c9ecabab13363e72d880f2fb504c5f750433b2b6f16e99f4ec21ada284c/pytest_timeout-2.4.0.tar.gz", hash = "sha256:7e68e90b01f9eff71332b25001f85c75495fc4e3a836701876183c4bcfd0540a", size = 17973, upload-time = "2025-05-05T19:44:34.99Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fa/b6/3127540ecdf1464a00e5a01ee60a1b09175f6913f0644ac748494d9c4b21/pytest_timeout-2.4.0-py3-none-any.whl", hash = "sha256:c42667e5cdadb151aeb5b26d114aff6bdf5a907f176a007a30b940d3d865b5c2", size = 14382, upload-time = "2025-05-05T19:44:33.502Z" },
 ]
 
 [[package]]
