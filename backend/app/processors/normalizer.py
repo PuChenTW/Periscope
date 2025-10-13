@@ -316,7 +316,14 @@ class ContentNormalizer:
 
     def _normalize_url(self, article: Article) -> Article:
         """
-        Normalize article URL: remove tracking params, ensure https.
+        Normalize article URL for canonical form and cache key consistency.
+
+        Transformations:
+        1. Remove tracking parameters (utm_*, fbclid, gclid, ref, source, campaign)
+        2. Sort query parameters alphabetically
+        3. Strip URL fragments (#anchor)
+        4. Normalize domain to lowercase
+        5. Upgrade HTTP to HTTPS
 
         Args:
             article: Article to normalize
@@ -325,29 +332,37 @@ class ContentNormalizer:
             New Article with normalized URL
         """
         url_str = str(article.url)
-
-        # Remove common tracking parameters
-        tracking_params = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "ref", "campaign"]
-
-        # Parse URL and rebuild without tracking params
         parsed = urlparse(url_str)
 
-        # Filter out tracking params
-        if parsed.query:
-            query_params = parse_qs(parsed.query)
-            filtered_params = {k: v for k, v in query_params.items() if k not in tracking_params}
+        # 1. Remove tracking parameters
+        tracking_params = {
+            "utm_source",
+            "utm_medium",
+            "utm_campaign",
+            "utm_content",
+            "utm_term",
+            "fbclid",
+            "gclid",
+            "ref",
+            "source",
+            "campaign",
+        }
 
-            # Rebuild query string
-            new_query = urlencode(filtered_params, doseq=True) if filtered_params else ""
+        # 2. Filter and sort query parameters
+        query_params = parse_qs(parsed.query, keep_blank_values=True) if parsed.query else {}
+        filtered_params = {k: v for k, v in query_params.items() if k not in tracking_params}
+        sorted_query = urlencode(sorted(filtered_params.items()), doseq=True) if filtered_params else ""
 
-            # Rebuild URL
-            url_str = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+        # 3. Upgrade to HTTPS
+        scheme = "https" if parsed.scheme == "http" else parsed.scheme
 
-        # Ensure https (upgrade http to https)
-        if url_str.startswith("http://"):
-            url_str = "https://" + url_str[7:]
+        # 4. Normalize domain to lowercase
+        netloc = parsed.netloc.lower()
 
-        return article.model_copy(update={"url": HttpUrl(url_str)})
+        # 5. Rebuild URL without fragment (stripped)
+        normalized_url = urlunparse((scheme, netloc, parsed.path, parsed.params, sorted_query, ""))
+
+        return article.model_copy(update={"url": HttpUrl(normalized_url)})
 
     def _enforce_content_length(self, article: Article) -> Article:
         """
