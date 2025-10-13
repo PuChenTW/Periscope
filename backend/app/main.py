@@ -26,7 +26,7 @@ def create_app() -> FastAPI:
         description="Backend API for Personal Daily Reading Digest",
         version="0.1.0",
         debug=get_settings().debug,
-        lifespan=lifespan,
+        lifespan=lifespan if not get_settings().test_mode else None,
     )
 
     app.add_middleware(

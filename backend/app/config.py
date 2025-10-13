@@ -124,6 +124,15 @@ class SecuritySettings(BaseModel):
     jwt_expire_minutes: int = 30
 
 
+class TemporalSettings(BaseModel):
+    """Temporal workflow orchestration configuration."""
+
+    server_url: str = "localhost:7233"
+    namespace: str = "default"
+    task_queue: str = "periscope-digest"
+    client_identity: str = "periscope-client"
+
+
 class Settings(BaseSettings):
     """Main application settings with nested configuration groups.
 
@@ -141,6 +150,7 @@ class Settings(BaseSettings):
 
     app_name: str = "Personal Daily Reading Digest"
     debug: bool = False
+    test_mode: bool = False
 
     # Nested configuration groups
     database: DatabaseSettings
@@ -157,6 +167,7 @@ class Settings(BaseSettings):
     content: ContentNormalizationSettings = ContentNormalizationSettings()
     personalization: PersonalizationSettings = PersonalizationSettings()
     security: SecuritySettings
+    temporal: TemporalSettings = TemporalSettings()
 
 
 @cache

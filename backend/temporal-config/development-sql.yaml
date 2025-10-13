@@ -1,0 +1,18 @@
+# Temporal dynamic configuration for development
+# This file contains runtime configuration for Temporal server
+# See: https://docs.temporal.io/references/dynamic-configuration
+
+# Keep history for 7 days in development
+system.forceSearchAttributesCacheRefreshOnRead:
+  - value: true
+    constraints: {}
+
+# Increase workflow execution retention for debugging
+system.defaultWorkflowExecutionRetentionPeriodInDays:
+  - value: 7
+    constraints: {}
+
+# Enable verbose logging for development
+system.enableDebugMode:
+  - value: true
+    constraints: {}

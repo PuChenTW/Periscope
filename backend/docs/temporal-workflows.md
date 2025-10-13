@@ -2,7 +2,6 @@
 
 ## Non-Negotiables
 
-- Temporal client/worker scaffolding is not in the repo yet; the sections below describe the target contracts so future implementation stays aligned.
 - **Idempotent activities**: check existing state before writes; safe to replay after retry.
 - **Deterministic inputs**: no random/time-based decisions inside workflows; pass timestamps from activities.
 - **Tight timeouts**: every activity declares a timeout class (fast/medium/long) in code + table below.

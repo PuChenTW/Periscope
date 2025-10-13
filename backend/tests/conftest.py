@@ -1,6 +1,7 @@
 import copy
 import os
 from collections.abc import AsyncGenerator
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
@@ -12,6 +13,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.database import create_engine_and_session
 from app.main import create_app
+from app.temporal.client import get_temporal_client
 from app.utils.redis_client import get_redis_client
 
 postgress = create_postgres_fixture(scope="session")
@@ -42,6 +44,7 @@ def override_environment(database_url):
 
     # Application settings
     os.environ["DEBUG"] = "true"
+    os.environ["TEST_MODE"] = "true"
 
     # Nested configuration using __ delimiter
     os.environ["DATABASE__URL"] = database_url
@@ -87,6 +90,12 @@ async def redis_client():
 @pytest.fixture
 def client(session, redis_client):
     app = create_app()
+    temporal_client = MagicMock()
+    temporal_client.service_client = MagicMock()
+    temporal_client.service_client.check_health = AsyncMock()
+    temporal_client.service_client.check_health.return_value = True
+
     app.dependency_overrides[get_redis_client] = lambda: redis_client
+    app.dependency_overrides[get_temporal_client] = lambda: temporal_client
     with TestClient(app) as c:
         yield c

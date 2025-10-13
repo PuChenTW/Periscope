@@ -8,7 +8,13 @@ Refactor processors so they stop mutating articles in-place, then stand up the m
 
 ### ✅ Phase 0 Complete: Processor Refactor (2025-10-12)
 
-**Next**: Phase 1 - Temporal Infrastructure
+### ✅ Phase 1 Complete: Temporal Infrastructure (2025-10-12)
+
+### ✅ Phase 1.5 Complete: Critical Integration Fixes (2025-10-12)
+
+**Status**: All blocking issues resolved. Infrastructure ready for Phase 2 implementation.
+
+**Next**: Phase 2 - Relevance Activity Implementation
 
 ### Implementation Plan
 
@@ -30,9 +36,9 @@ Refactor processors so they stop mutating articles in-place, then stand up the m
 - `SummaryResult`: summary + key points + reasoning
 - Topic/Similarity processors return native Python types (`list[str]`, `list[ArticleGroup]`)
 
-#### Phase 1: Temporal Infrastructure
+#### ✅ Phase 1: Temporal Infrastructure (Complete)
 
-1. Create foundational package layout:
+1. ✅ Created foundational package layout:
 
 ```text
 app/temporal/
@@ -41,18 +47,20 @@ app/temporal/
 │   ├── __init__.py
 │   └── processing.py        # processor-driven activities live here
 ├── client.py                # helpers for starting Temporal client when needed
-└── shared.py                # shared activity utilities (timeouts, logging hooks)
+├── shared.py                # shared activity utilities (timeouts, logging hooks)
+├── worker.py                # worker entry point (process hosting registered activities)
+└── workflows.py             # workflow stubs / orchestrators (daily digest, etc.)
 ```
 
-- Ensure dependency injection mirrors existing processor usage (settings + cache helpers).
-- Share activity option presets (timeout/retry classes) so future activities reuse the same constants.
-
-2. Add lightweight smoke tests to confirm the package imports cleanly (no Temporal worker launch yet).
+2. ✅ Added timeout/retry policy presets (FAST/MEDIUM/LONG_TIMEOUT, retry policies)
+3. ✅ Added client helpers (get_temporal_client, start_workflow, query/cancel)
+4. ✅ Added lightweight smoke tests (22 tests passing)
 
 #### Phase 2: Relevance Activity Contract
 
 3. Define the activity surface in `activities/processing.py` without implementation:
-     - Decide on function signature (e.g., `score_relevance_batch(profile: InterestProfile, articles: list[Article]) -> list[Article]`).
+     - Function signature: `score_relevance_batch(profile_id: str, articles: list[Article], quality_scores: dict[str, int] | None = None) -> BatchRelevanceResult`
+     - Returns `BatchRelevanceResult` containing original articles and relevance results keyed by article.url (preserves immutability)
      - Document idempotency via the cache key (`profile.id` + `article.url`) rather than metadata presence.
      - Capture timeout/retry options referencing `docs/temporal-workflows.md`.
 4. Add unit tests covering the idempotency guard logic (verifies cached entries bypass re-score).
@@ -96,11 +104,33 @@ app/temporal/
 
 ### Success Criteria
 
+**Phase 0-1 (Complete)**:
+
 - ✅ Processor refactor complete: processors return new objects, no in-place mutations
 - ✅ All 182 processor tests passing
 - ✅ Documentation updated: `common_patterns.md`, `content_processing.md`, 4 processor docs
-- ❌ Temporal scaffolding exists (`app/temporal/` package with shared helpers)
-- ❌ Activity `score_relevance_batch` exists in `app/temporal/activities/processing.py`
+- ✅ Temporal scaffolding exists (`app/temporal/` package with shared helpers)
+- ✅ TemporalSettings added to config.py with server_url, namespace, task_queue
+- ✅ Activity options presets (FAST/MEDIUM/LONG_TIMEOUT, retry policies) in shared.py
+- ✅ Client helpers (get_temporal_client, start_workflow, query/cancel) in client.py
+- ✅ Activity stub `score_relevance_batch` exists in `app/temporal/activities/processing.py` with BatchRelevanceResult
+- ✅ 22 tests passing: import smoke tests + shared utility unit tests
+
+**Phase 1.5 (Complete)**:
+
+- ✅ Activity has `@activity.defn` decorator with timeout/retry (app/temporal/activities/processing.py:42-45)
+- ✅ Worker implementation exists (`app/temporal/worker.py` - 93 lines)
+- ✅ Client uses singleton pattern with proper shutdown (app/temporal/client.py with asyncio.Lock)
+- ⚠️ Activities use class-based pattern with dependency injection (deferred to Phase 2)
+- ✅ Domain exceptions defined (`app/exceptions.py` - 65 lines with RetryableError/NonRetryableError)
+- ✅ URL normalization utility (enhanced in app/processors/normalizer.py)
+- ✅ Observability fields in `BatchRelevanceResult` (start/end timestamps, ai_calls, errors_count)
+- ✅ Minimal workflow stub exists (app/temporal/workflows.py - 195 lines with complete TODO sequence)
+- ✅ Serialization tested (tests/test_temporal/test_workflow_integration.py - 105 lines)
+
+**Phase 2-3 (Ready to Start)**:
+
+- ❌ Activity `score_relevance_batch` implementation
 - ❌ Activity passes 6+ integration tests covering happy path, idempotency, errors
 - ❌ Metadata fields flow correctly through pipeline orchestrator
 - ❌ Idempotency verified: cache guard (`profile.id` + `article.url`) prevents redundant scoring
@@ -108,7 +138,6 @@ app/temporal/
 
 ### Out of Scope (Tracked Separately)
 
-- Actual Temporal worker implementation (separate workstream)
 - Digest assembly using relevance metadata (tracked as "Digest assembly enhancements")
 - Quality scorer / summarizer caching (separate pending items)
 - Metrics / telemetry (blocked pending sink selection)

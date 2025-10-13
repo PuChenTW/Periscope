@@ -5,8 +5,10 @@ from loguru import logger
 from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlmodel.ext.asyncio.session import AsyncSession
+from temporalio.client import Client
 
 from app.api.basic import get_db_session
+from app.temporal.client import get_temporal_client
 from app.utils.redis_client import get_redis_client
 
 router = APIRouter()
@@ -21,15 +23,20 @@ async def health_check():
 async def readiness_check(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     redis: Annotated[Redis, Depends(get_redis_client)],
+    temporal_client: Annotated[Client, Depends(get_temporal_client)],
 ):
     try:
         await db.exec(text("SELECT 1"))
         await redis.ping()
+        health = await temporal_client.service_client.check_health()
+        if not health:
+            raise Exception("Temporal service is not healthy")
 
         return {
             "status": "ready",
             "database": "connected",
             "cache": "connected",
+            "temporal": "connected",
         }
 
     except Exception as e:
