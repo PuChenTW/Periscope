@@ -1,4 +1,5 @@
 from datetime import datetime, time
+from typing import Optional
 
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
@@ -14,7 +15,7 @@ class User(SQLModel, ULIDMixedIn, ActiveLifecycleTimestampMixin, table=True):
     timezone: str = Field(default="UTC")
     is_active: bool = Field(default=True)
 
-    digest_config: "DigestConfiguration | None" = Relationship(back_populates="user")
+    digest_config: Optional["DigestConfiguration"] = Relationship(back_populates="user")
     delivery_logs: list["DeliveryLog"] = Relationship(back_populates="user")
 
 
@@ -28,7 +29,7 @@ class DigestConfiguration(SQLModel, ULIDMixedIn, ActiveLifecycleTimestampMixin, 
 
     user: User | None = Relationship(back_populates="digest_config")
     sources: list["ContentSource"] = Relationship(back_populates="config")
-    interest_profile: "InterestProfile | None" = Relationship(back_populates="config")
+    interest_profile: Optional["InterestProfile"] = Relationship(back_populates="config")
 
 
 class ContentSource(SQLModel, ULIDMixedIn, ActiveLifecycleTimestampMixin, table=True):
