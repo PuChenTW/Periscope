@@ -1,10 +1,7 @@
-"""
-Tests for SimilarityDetector implementation using PydanticAI
-"""
+"""Tests for SimilarityDetector implementation using PydanticAI."""
 
-import json
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import HttpUrl, ValidationError
@@ -33,9 +30,7 @@ class TestSimilarityDetector:
     @pytest.fixture
     def similarity_detector(self, mock_ai_provider):
         """Create SimilarityDetector instance for testing."""
-        mock_cache = AsyncMock()
-        detector = SimilarityDetector(cache=mock_cache, ai_provider=mock_ai_provider)
-        return detector
+        return SimilarityDetector(ai_provider=mock_ai_provider)
 
     @pytest.fixture
     def sample_articles(self):
@@ -103,9 +98,6 @@ class TestSimilarityDetector:
         )
 
         with similarity_detector.agent.override(model=test_model):
-            # Mock cache to return None (no cached result)
-            similarity_detector.cache.get.return_value = None
-
             is_similar = await similarity_detector._compare_articles(sample_articles[0], sample_articles[1])
 
             assert is_similar is True
@@ -122,8 +114,6 @@ class TestSimilarityDetector:
         )
 
         with similarity_detector.agent.override(model=test_model):
-            similarity_detector.cache.get.return_value = None
-
             is_similar = await similarity_detector._compare_articles(sample_articles[0], sample_articles[2])
 
             assert is_similar is False
@@ -140,8 +130,6 @@ class TestSimilarityDetector:
         )
 
         with similarity_detector.agent.override(model=test_model):
-            similarity_detector.cache.get.return_value = None
-
             is_similar = await similarity_detector._compare_articles(sample_articles[0], sample_articles[1])
 
             # Should be False because confidence is below threshold
@@ -219,41 +207,8 @@ class TestSimilarityDetector:
                 assert len(group.similar_articles) == 0
 
     @pytest.mark.asyncio
-    async def test_cache_hit(self, similarity_detector, sample_articles):
-        """Test that cached results are used when available."""
-
-        # Mock cached result
-        cached_data = json.dumps({"is_similar": True})
-        similarity_detector.cache.get.return_value = cached_data
-
-        is_similar = await similarity_detector._compare_articles(sample_articles[0], sample_articles[1])
-
-        # Should use cached result
-        assert is_similar is True
-
-        # Agent should not be called (no AI request made)
-        similarity_detector.cache.get.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_cache_miss_stores_result(self, similarity_detector, sample_articles):
-        """Test that comparison results are cached."""
-        # Mock cache miss
-        similarity_detector.cache.get.return_value = None
-
-        # Override agent with TestModel
-        test_model = TestModel(custom_output_args=SimilarityScore(confidence=0.9, reasoning="Similar articles"))
-
-        with similarity_detector.agent.override(model=test_model):
-            await similarity_detector._compare_articles(sample_articles[0], sample_articles[1])
-
-            # Verify cache was written to
-            similarity_detector.cache.setex.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_error_handling_in_comparison(self, similarity_detector, sample_articles):
         """Test that errors during comparison are handled gracefully."""
-        similarity_detector.cache.get.return_value = None
-
         # Make agent raise an exception
         with patch.object(similarity_detector.agent, "run", side_effect=Exception("AI service error")):
             is_similar = await similarity_detector._compare_articles(sample_articles[0], sample_articles[1])
@@ -274,13 +229,6 @@ class TestSimilarityDetector:
         group_id_2 = similarity_detector._generate_group_id([sample_articles[1], sample_articles[0]])
 
         assert group_id_1 == group_id_2
-
-    def test_generate_cache_key_order_independent(self, similarity_detector, sample_articles):
-        """Test that cache key is same regardless of article order."""
-        key_1 = similarity_detector._generate_cache_key(sample_articles[0], sample_articles[1])
-        key_2 = similarity_detector._generate_cache_key(sample_articles[1], sample_articles[0])
-
-        assert key_1 == key_2
 
     def test_build_comparison_prompt(self, similarity_detector, sample_articles):
         """Test that comparison prompt is built correctly."""

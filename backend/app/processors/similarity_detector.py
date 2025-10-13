@@ -6,7 +6,6 @@ different sources and group them together based on content similarity.
 """
 
 import hashlib
-import json
 import textwrap
 from datetime import UTC, datetime
 
@@ -16,7 +15,6 @@ from pydantic import BaseModel, Field
 from app.config import SimilaritySettings, get_settings
 from app.processors.ai_provider import AIProvider, create_ai_provider
 from app.processors.fetchers.base import Article
-from app.utils.cache import CacheProtocol
 
 
 class SimilarityScore(BaseModel):
@@ -64,7 +62,6 @@ class SimilarityDetector:
 
     def __init__(
         self,
-        cache: CacheProtocol,
         settings: SimilaritySettings | None = None,
         ai_provider: AIProvider | None = None,
     ):
@@ -72,12 +69,10 @@ class SimilarityDetector:
         Initialize the similarity detector with PydanticAI agent.
 
         Args:
-            cache: Cache instance for storing similarity results
             settings: Similarity settings (uses get_settings().similarity if not provided)
             ai_provider: AI provider instance (creates from settings if not provided)
         """
         self.settings = settings or get_settings().similarity
-        self.cache = cache
 
         # Create AI provider if not injected
         provider = ai_provider or create_ai_provider(get_settings())
@@ -163,12 +158,6 @@ class SimilarityDetector:
         Returns:
             Boolean indicating if articles are similar (confidence >= threshold)
         """
-        # Check cache first
-        cache_key = self._generate_cache_key(article1, article2)
-        cached_result = await self._get_cached_similarity(cache_key)
-        if cached_result is not None:
-            return cached_result
-
         # Prepare comparison prompt
         prompt = self._build_comparison_prompt(article1, article2)
 
@@ -185,9 +174,6 @@ class SimilarityDetector:
                 f"-> Similar: {is_similar} (confidence: {similarity_score.confidence:.2f}, "
                 f"threshold: {self.settings.threshold:.2f})"
             )
-
-            # Cache the result
-            await self._cache_similarity(cache_key, is_similar)
 
             return is_similar
 
@@ -278,41 +264,11 @@ class SimilarityDetector:
         combined = "|".join(urls)
         return hashlib.sha256(combined.encode()).hexdigest()[:16]
 
-    def _generate_cache_key(self, article1: Article, article2: Article) -> str:
-        """Generate cache key for article pair."""
-        # Sort URLs to ensure consistent cache key regardless of order
-        urls = sorted([str(article1.url), str(article2.url)])
-        combined = f"similarity:{urls[0]}|{urls[1]}"
-        return hashlib.sha256(combined.encode()).hexdigest()
-
-    async def _get_cached_similarity(self, cache_key: str) -> bool | None:
-        """Retrieve cached similarity result."""
-        try:
-            cached = await self.cache.get(cache_key)
-            if cached:
-                data = json.loads(cached)
-                return data["is_similar"]
-        except Exception as e:
-            logger.warning(f"Error retrieving cached similarity: {e}")
-        return None
-
-    async def _cache_similarity(self, cache_key: str, is_similar: bool) -> None:
-        """Cache similarity result."""
-        try:
-            ttl_seconds = self.settings.cache_ttl_minutes * 60
-            data = {"is_similar": is_similar}
-            await self.cache.setex(cache_key, ttl_seconds, json.dumps(data))
-        except Exception as e:
-            logger.warning(f"Error caching similarity result: {e}")
-
 
 if __name__ == "__main__":
     import asyncio
 
     from pydantic import HttpUrl
-
-    from app.utils.cache import RedisCache
-    from app.utils.redis_client import get_redis_client
 
     async def main():
         # Create test articles
@@ -351,10 +307,8 @@ if __name__ == "__main__":
             ai_topics=["programming languages", "software development"],
         )
 
-        # Initialize detector with cache
-        redis = await get_redis_client()
-        cache = RedisCache(redis_client=redis)
-        detector = SimilarityDetector(cache=cache)
+        # Initialize detector without external cache (demo purpose)
+        detector = SimilarityDetector()
 
         # Test similarity detection
         print("\n=== Testing Similarity Detection ===\n")

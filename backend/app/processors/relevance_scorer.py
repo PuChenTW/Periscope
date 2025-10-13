@@ -5,7 +5,6 @@ This module provides deterministic keyword-based scoring with optional AI-powere
 semantic enhancement for personalizing article relevance to user interests.
 """
 
-import json
 import textwrap
 from datetime import UTC, datetime
 
@@ -16,7 +15,6 @@ from app.config import PersonalizationSettings, get_settings
 from app.models.users import InterestProfile
 from app.processors.ai_provider import AIProvider, create_ai_provider
 from app.processors.fetchers.base import Article
-from app.utils.cache import CacheProtocol
 from app.utils.text_processing import normalize_term_list, normalize_text
 
 
@@ -72,7 +70,6 @@ class RelevanceScorer:
 
     def __init__(
         self,
-        cache: CacheProtocol,
         settings: PersonalizationSettings | None = None,
         ai_provider: AIProvider | None = None,
     ):
@@ -80,12 +77,10 @@ class RelevanceScorer:
         Initialize relevance scorer with configuration and dependencies.
 
         Args:
-            cache: Cache instance for storing relevance results
             settings: Personalization settings (uses get_settings().personalization if not provided)
             ai_provider: AI provider instance (creates from settings if not provided)
         """
         self.settings = settings or get_settings().personalization
-        self.cache = cache
 
         # Create AI provider if not injected
         if ai_provider is None:
@@ -152,12 +147,7 @@ class RelevanceScorer:
                 matched_keywords=[],
             )
 
-        # Check cache first
-        cache_key = self._generate_cache_key(profile, article)
-        cached_result = await self._get_cached_relevance(cache_key)
-        if cached_result is not None:
-            logger.debug(f"Cache hit for article: {article.title[:50]}...")
-            return cached_result
+        # (Caching removed) Caller is now responsible for any memoization.
 
         # Parse and normalize keywords
         keywords = normalize_term_list(profile.keywords, self.settings.max_keywords)
@@ -205,9 +195,6 @@ class RelevanceScorer:
             passes_threshold=passes_threshold,
             matched_keywords=matched_keywords,
         )
-
-        # Cache the result
-        await self._cache_relevance(cache_key, result)
 
         logger.debug(
             f"Scored article '{article.title[:50]}...': "
@@ -379,52 +366,4 @@ class RelevanceScorer:
 
         return 0
 
-    def _generate_cache_key(self, profile: InterestProfile, article: Article) -> str:
-        """
-        Generate cache key for relevance result.
-
-        Uses profile ID and article URL for unique identification.
-        URL is sufficient as it uniquely identifies articles.
-
-        Args:
-            profile: User interest profile
-            article: Article being scored
-
-        Returns:
-            Cache key string
-        """
-        # Use URL directly - it's unique per article and more debuggable than hashes
-        return f"relevance:{profile.id}:{article.url}"
-
-    async def _get_cached_relevance(self, cache_key: str) -> RelevanceResult | None:
-        """
-        Retrieve cached relevance result.
-
-        Args:
-            cache_key: Cache key
-
-        Returns:
-            Cached RelevanceResult or None if not found
-        """
-        try:
-            cached = await self.cache.get(cache_key)
-            if cached:
-                data = json.loads(cached)
-                return RelevanceResult(**data)
-        except Exception as e:
-            logger.warning(f"Error retrieving cached relevance: {e}")
-        return None
-
-    async def _cache_relevance(self, cache_key: str, result: RelevanceResult) -> None:
-        """
-        Cache relevance result.
-
-        Args:
-            cache_key: Cache key
-            result: RelevanceResult to cache
-        """
-        try:
-            ttl_seconds = self.settings.cache_ttl_minutes * 60
-            await self.cache.setex(cache_key, ttl_seconds, result.model_dump_json())
-        except Exception as e:
-            logger.warning(f"Error caching relevance result: {e}")
+    # Cache-related helper methods removed; caller should implement caching externally if desired.

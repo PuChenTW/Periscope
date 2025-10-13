@@ -2,7 +2,6 @@
 Tests for RelevanceScorer implementation.
 """
 
-import json
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
@@ -14,7 +13,6 @@ from pydantic_ai.models.test import TestModel
 from app.config import PersonalizationSettings
 from app.processors.fetchers.base import Article
 from app.processors.relevance_scorer import (
-    RelevanceBreakdown,
     RelevanceScorer,
     SemanticRelevanceResult,
 )
@@ -62,9 +60,7 @@ class TestRelevanceScorer:
     @pytest.fixture
     def relevance_scorer(self, mock_ai_provider, custom_settings):
         """Create RelevanceScorer instance for testing."""
-        mock_cache = AsyncMock()
         scorer = RelevanceScorer(
-            cache=mock_cache,
             settings=custom_settings,
             ai_provider=mock_ai_provider,
         )
@@ -117,8 +113,6 @@ class TestRelevanceScorer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        relevance_scorer.cache.get.return_value = None
-
         result = await relevance_scorer.score_article(article, empty_profile)
 
         assert result.relevance_score == 0
@@ -127,7 +121,6 @@ class TestRelevanceScorer:
     @pytest.mark.asyncio
     async def test_keyword_scoring_high_match_in_title(self, relevance_scorer, sample_profile, sample_article):
         """Test keyword scoring with high match in title."""
-        relevance_scorer.cache.get.return_value = None
         relevance_scorer.settings.enable_semantic_scoring = False
 
         result = await relevance_scorer.score_article(sample_article, sample_profile)
@@ -146,7 +139,6 @@ class TestRelevanceScorer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        relevance_scorer.cache.get.return_value = None
         relevance_scorer.settings.enable_semantic_scoring = False
 
         result = await relevance_scorer.score_article(article, sample_profile)
@@ -166,7 +158,6 @@ class TestRelevanceScorer:
             tags=["Machine Learning", "AI"],
         )
 
-        relevance_scorer.cache.get.return_value = None
         relevance_scorer.settings.enable_semantic_scoring = False
 
         result = await relevance_scorer.score_article(article, sample_profile)
@@ -198,8 +189,6 @@ class TestRelevanceScorer:
             ai_topics=["artificial intelligence"],
             metadata={"quality_score": 85},
         )
-
-        relevance_scorer.cache.get.return_value = None
 
         # Mock AI response
         test_model = TestModel(
@@ -233,7 +222,6 @@ class TestRelevanceScorer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        relevance_scorer.cache.get.return_value = None
         relevance_scorer.settings.enable_semantic_scoring = False
 
         result = await relevance_scorer.score_article(fresh_article, sample_profile)
@@ -250,7 +238,6 @@ class TestRelevanceScorer:
         # Modify article to be 48 hours old
         sample_article.published_at = datetime.now(UTC) - timedelta(hours=48)
 
-        relevance_scorer.cache.get.return_value = None
         relevance_scorer.settings.enable_semantic_scoring = False
 
         result = await relevance_scorer.score_article(sample_article, sample_profile)
@@ -264,7 +251,6 @@ class TestRelevanceScorer:
     async def test_quality_boost_high_quality_with_matches(self, relevance_scorer, sample_profile, sample_article):
         """Test quality boost for high-quality articles with keyword matches."""
         # Article already has quality_score=85 and matches keywords
-        relevance_scorer.cache.get.return_value = None
         relevance_scorer.settings.enable_semantic_scoring = False
 
         # Pass quality_score as parameter (no longer in article.metadata)
@@ -286,7 +272,6 @@ class TestRelevanceScorer:
             metadata={"quality_score": 90},
         )
 
-        relevance_scorer.cache.get.return_value = None
         relevance_scorer.settings.enable_semantic_scoring = False
 
         result = await relevance_scorer.score_article(article, sample_profile)
@@ -307,7 +292,6 @@ class TestRelevanceScorer:
             boost_factor=1.5,  # 50% boost
         )
 
-        relevance_scorer.cache.get.return_value = None
         relevance_scorer.settings.enable_semantic_scoring = False
 
         result = await relevance_scorer.score_article(sample_article, profile_with_boost)
@@ -376,7 +360,6 @@ class TestRelevanceScorer:
             metadata={"quality_score": 90},
         )
 
-        relevance_scorer.cache.get.return_value = None
         relevance_scorer.settings.enable_semantic_scoring = False
 
         result = await relevance_scorer.score_article(strong_match_article, test_profile)
@@ -396,7 +379,6 @@ class TestRelevanceScorer:
             boost_factor=1.0,
         )
 
-        relevance_scorer.cache.get.return_value = None
         relevance_scorer.settings.enable_semantic_scoring = False
 
         result = await relevance_scorer.score_article(sample_article, profile_no_match)
@@ -405,47 +387,6 @@ class TestRelevanceScorer:
         assert result.passes_threshold is False
 
     @pytest.mark.asyncio
-    async def test_cache_hit(self, relevance_scorer, sample_profile, sample_article):
-        """Test cached results are used when available."""
-        # Mock cached result with correct RelevanceResult structure
-        cached_data = json.dumps(
-            {
-                "relevance_score": 75,
-                "breakdown": RelevanceBreakdown(
-                    keyword_score=50,
-                    semantic_score=20.0,
-                    temporal_boost=3,
-                    quality_boost=5,
-                    final_score=75,
-                    matched_keywords=["ai", "machine learning"],
-                    threshold_passed=True,
-                ).model_dump(),
-                "passes_threshold": True,
-                "matched_keywords": ["ai", "machine learning"],
-            }
-        )
-        relevance_scorer.cache.get.return_value = cached_data
-
-        result = await relevance_scorer.score_article(sample_article, sample_profile)
-
-        # Should use cached result
-        assert result.relevance_score == 75
-        assert result.passes_threshold is True
-
-        # Cache should be checked
-        relevance_scorer.cache.get.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_cache_miss_stores_result(self, relevance_scorer, sample_profile, sample_article):
-        """Test results are cached after scoring."""
-        relevance_scorer.cache.get.return_value = None
-        relevance_scorer.settings.enable_semantic_scoring = False
-
-        await relevance_scorer.score_article(sample_article, sample_profile)
-
-        # Verify cache was written to
-        relevance_scorer.cache.setex.assert_called_once()
-
     @pytest.mark.asyncio
     async def test_ai_failure_graceful_degradation(self, relevance_scorer, sample_profile):
         """Test graceful fallback when AI fails."""
@@ -463,7 +404,6 @@ class TestRelevanceScorer:
             metadata={"quality_score": 85},
         )
 
-        relevance_scorer.cache.get.return_value = None
         relevance_scorer.agent.run = AsyncMock(side_effect=Exception("AI service error"))
 
         result = await relevance_scorer.score_article(article_for_ai, sample_profile)
@@ -519,17 +459,9 @@ class TestRelevanceScorer:
         assert score == 60
         assert set(matched) == set(keywords)
 
-    def test_generate_cache_key_consistency(self, relevance_scorer, sample_profile, sample_article):
-        """Test cache key generation is consistent."""
-        key1 = relevance_scorer._generate_cache_key(sample_profile, sample_article)
-        key2 = relevance_scorer._generate_cache_key(sample_profile, sample_article)
-
-        assert key1 == key2
-
     @pytest.mark.asyncio
     async def test_metadata_structure(self, relevance_scorer, sample_profile, sample_article):
         """Test final metadata structure in article."""
-        relevance_scorer.cache.get.return_value = None
         relevance_scorer.settings.enable_semantic_scoring = False
 
         result = await relevance_scorer.score_article(sample_article, sample_profile)
