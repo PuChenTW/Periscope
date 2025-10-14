@@ -1,22 +1,62 @@
 import copy
 import os
-from collections.abc import AsyncGenerator
+import subprocess
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
 from fakeredis import FakeAsyncRedis
 from fastapi.testclient import TestClient
+from loguru import logger
 from pytest_mock_resources import PostgresConfig, create_postgres_fixture
-from sqlmodel import SQLModel
-from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel import Session, SQLModel, create_engine
 
-from app.database import create_engine_and_session
+from app.database import get_async_sessionmaker, get_engine
 from app.main import create_app
 from app.temporal.client import get_temporal_client
 from app.utils.redis_client import get_redis_client
 
-postgress = create_postgres_fixture(scope="session")
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_docker_containers():
+    """
+    Clean up stale Docker containers before test session starts.
+
+    Removes any leftover containers from previous test runs that may cause
+    port conflicts or database connection issues.
+    """
+    try:
+        # List all containers with names containing 'periscope' or 'pmr_postgres'
+        result = subprocess.run(
+            ["docker", "ps", "-a", "--filter", "name=periscope", "--filter", "name=pmr_postgres", "-q"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        container_ids = result.stdout.strip().split("\n")
+        container_ids = [cid for cid in container_ids if cid]
+
+        if container_ids:
+            logger.info(f"Cleaning up {len(container_ids)} stale Docker containers")
+            subprocess.run(
+                ["docker", "rm", "-f", *container_ids],
+                capture_output=True,
+                check=False,
+            )
+            logger.info("Docker cleanup completed")
+        else:
+            logger.debug("No stale Docker containers found")
+
+    except FileNotFoundError:
+        logger.warning("Docker CLI not found - skipping container cleanup")
+    except Exception as e:
+        logger.warning(f"Failed to clean up Docker containers: {e}")
+
+    yield
+
+
+postgress = create_postgres_fixture(scope="session", async_=True)
 
 
 @pytest.fixture(scope="session")
@@ -28,7 +68,7 @@ def pmr_postgres_config(worker_id):
         username="root",
         password="password",
         root_database=f"periscope_{worker_id}",
-        drivername="postgresql+psycopg",
+        drivername="postgresql+asyncpg",
     )
 
 
@@ -58,37 +98,82 @@ def override_environment(database_url):
     os.environ.update(original_environ)
 
 
-@pytest_asyncio.fixture
-async def session(postgress, override_environment) -> AsyncGenerator[AsyncSession]:
+@pytest.fixture(autouse=True)
+def setup_database(override_environment, postgress):
     """
-    The test session that will be used in the tests.
+    Ensures that the database schema is created before any tests run
+    and dropped after all tests complete.
     """
+    # Clear cache first to ensure fresh engine for each test session
+    engine = create_engine(
+        os.environ["DATABASE__URL"].replace("asyncpg", "psycopg"),
+        echo=False,
+        future=True,
+    )
 
-    engine, async_session = create_engine_and_session()
+    try:
+        SQLModel.metadata.drop_all(engine)
+        SQLModel.metadata.create_all(engine)
+        yield
+    finally:
+        SQLModel.metadata.drop_all(engine)
+        engine.dispose()
 
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.drop_all)
-        await conn.run_sync(SQLModel.metadata.create_all)
 
-        async with async_session() as session_:
-            try:
-                yield session_
-            except Exception:
-                await session_.rollback()
-                raise
-            finally:
-                await conn.run_sync(SQLModel.metadata.drop_all)
+@pytest.fixture
+def session(setup_database, override_environment):
+    engine = create_engine(
+        os.environ["DATABASE__URL"].replace("asyncpg", "psycopg"),
+        echo=False,
+        future=True,
+    )
+    with Session(engine) as session_:
+        try:
+            yield session_
+        except Exception:
+            session_.rollback()
+            raise
+        finally:
+            session_.close()
+
+
+@pytest.fixture
+def clear_async_db_cache():
+    """
+    Clear cached async database engine and sessionmaker between tests.
+
+    Use this fixture explicitly in tests that call Temporal activities or other
+    async code that creates its own database sessions via get_async_sessionmaker().
+    This prevents connection pool conflicts between sync test fixtures and async
+    activity code.
+
+    DO NOT use autouse=True - only apply where needed to avoid breaking parallel tests.
+    """
+    # Clear the cache before test
+    get_engine.cache_clear()
+    get_async_sessionmaker.cache_clear()
+
+    yield
+
+    # Clear again after test to ensure cleanup
+    get_engine.cache_clear()
+    get_async_sessionmaker.cache_clear()
 
 
 @pytest_asyncio.fixture
 async def redis_client():
+    """Provides a fresh FakeAsyncRedis client for each test."""
     client = FakeAsyncRedis(decode_responses=True)
-    yield client
-    await client.aclose()
+    try:
+        yield client
+    finally:
+        # Ensure clean state between tests
+        await client.flushall()
+        await client.aclose()
 
 
 @pytest.fixture
-def client(session, redis_client):
+def client(redis_client):
     app = create_app()
     temporal_client = MagicMock()
     temporal_client.service_client = MagicMock()

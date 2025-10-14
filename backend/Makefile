@@ -27,6 +27,11 @@ test:  ## Run pytest test suite
 test-cov:  ## Run tests with coverage report
 	uv run pytest --cov=./app tests/ -n auto
 
+test-clean:  ## Clean up test Docker containers
+	@echo "Cleaning up test Docker containers..."
+	@docker ps -a --filter "name=periscope" --filter "name=pmr_postgres" -q | xargs -r docker rm -f
+	@echo "Test containers cleaned"
+
 lint:  ## Run linting checks
 	uv run ruff check app/ tests/
 	uv run mypy app/
