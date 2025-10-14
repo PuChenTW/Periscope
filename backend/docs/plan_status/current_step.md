@@ -14,7 +14,7 @@ Refactor processors so they stop mutating articles in-place, then stand up the m
 
 **Status**: All blocking issues resolved. Infrastructure ready for Phase 2 implementation.
 
-**Next**: Phase 2 - Relevance Activity Implementation
+**Next**: Phase 4 - Integration Verification (end-to-end chain) – subsequent workflow orchestration phases remain pending.
 
 ### Implementation Plan
 
@@ -56,51 +56,68 @@ app/temporal/
 3. ✅ Added client helpers (get_temporal_client, start_workflow, query/cancel)
 4. ✅ Added lightweight smoke tests (22 tests passing)
 
-#### Phase 2: Relevance Activity Contract
+#### Phase 2: Relevance Activity Contract (Complete)
 
-3. Define the activity surface in `activities/processing.py` without implementation:
-     - Function signature: `score_relevance_batch(profile_id: str, articles: list[Article], quality_scores: dict[str, int] | None = None) -> BatchRelevanceResult`
-     - Returns `BatchRelevanceResult` containing original articles and relevance results keyed by article.url (preserves immutability)
-     - Document idempotency via the cache key (`profile.id` + `article.url`) rather than metadata presence.
-     - Capture timeout/retry options referencing `docs/temporal-workflows.md`.
-4. Add unit tests covering the idempotency guard logic (verifies cached entries bypass re-score).
+Implemented as specified:
 
-#### Phase 3: Activity Implementation & Tests
+- `score_relevance_batch` signature finalized (uses `BatchRelevanceRequest` wrapper instead of loose params)
+- Returns immutable `BatchRelevanceResult` holding original articles + relevance map
+- Idempotency: cache key `relevance:{profile_hash}:{article_url}` where profile hash derives from keywords, threshold, boost_factor
+- Timeout / retry policy documented in `temporal-workflows.md` (Medium class) and enforced via decorator usage in worker registration (policy wiring pending explicit constants integration)
+- Validation errors raise `ValidationError`; other exceptions captured per-article for partial continuation
 
-5. Implement `score_relevance_batch`:
-     - Initialize `RelevanceScorer` with injected cache/settings (reuse existing factory/helpers).
-     - Score each article sequentially, ensuring prior metadata persists.
-     - Use the cache key check to short-circuit already-scored pairs.
-     - Wrap AI provider errors and surface retryable exceptions as needed.
-6. Expand `tests/test_temporal/test_activities_processing.py`:
-     - Test activity with real `RelevanceScorer` (no Temporal overhead)
-     - Verify metadata fields are correctly added to articles
-     - Test idempotency (calling twice with same profile/article reuses cached result)
-     - Test with empty profile (should pass threshold)
-     - Test threshold filtering behavior
-     - Validate error handling when AI fails
+#### Phase 3: Activity Implementation & Tests (Complete)
 
-#### Phase 4: Integration Verification
+Delivered capabilities:
 
-7. Add end-to-end metadata propagation test:
-     - Run full processing chain: normalize → quality → topic → relevance
-     - Verify `relevance_score`, `relevance_breakdown`, `passes_relevance_threshold` present
-     - Confirm prior processor metadata (`quality_score`, `ai_topics`) preserved
-     - Exercise cache warm + reuse path to ensure metadata sticks.
+- Full implementation present in `app/temporal/activities/processing.py`
+- Dependency wiring: pulls settings, redis client, async session + repository, ai provider factory
+- Caching: Redis `setex` with TTL from personalization settings; cache hits short‑circuit scoring loop
+- Observability fields populated: `start_timestamp`, `end_timestamp`, `ai_calls`, `cache_hits`, `errors_count`
+- Partial failure handling: per-article try/except; failed articles omitted from `relevance_results` while loop continues
+- Tests in `tests/test_temporal/test_activities_processing.py` cover:
+  - Cache key determinism & variation
+  - Happy path scoring with quality score inputs
+  - Idempotency (second invocation all cache hits)
+  - Empty profile behavior (threshold pass with zero score)
+  - AI failure fallback (semantic score 0, no counted error)
+  - Partial per-article failure (errors_count increment)
+  - Explicit cache behavior (miss then hit)
 
-#### Phase 5: Workflow Integration (Optional for MVP)
+Remaining gaps (deferred to later phases):
 
-8. Create minimal `daily_digest` workflow stub in `workflows/digest.py`:
-     - Define workflow that will call activities in sequence once they exist:
-       - `fetch_sources` → `normalize_articles` → `score_quality` → `extract_topics` → `score_relevance` → `summarize`
-     - Keep calls behind `NotImplementedError` placeholders so imports succeed without full implementations.
-     - Document that this stub remains disabled until upstream activities ship.
+- No quality/topic/summarizer batch activities yet (placeholders only in workflow doc)
+- AI call counting heuristic (semantic_score > 0) may undercount deterministic AI paths; refine once telemetry sink chosen
+- Retry policy currently implicit; needs centralized constants applied when more activities added
+
+#### Phase 4: Integration Verification (In Progress / Pending Upstream Activities)
+
+Blocked prerequisites:
+
+- Missing implemented activities for normalization, quality scoring, topic extraction to form full chain
+- Workflow (`DailyDigestWorkflow`) still uses TODO placeholders and executes a minimal relevance activity call with empty inputs
+
+Planned tasks to complete Phase 4 once upstream activities land:
+
+ 1. Implement normalization, quality, topic (and optionally summarization) activities with same immutability + caching conventions
+ 2. Add end-to-end test constructing a synthetic profile + articles executing: normalize → quality → topics → relevance
+ 3. Assert metadata propagation (`quality_score`, `ai_topics`, `relevance_score`, `passes_threshold`)
+ 4. Add cache warm test: first run populates, second run asserts cache_hits equals article count and zero AI calls
+ 5. Extend `temporal-workflows.md` matrix with new activities (mark ✅ as they land)
+
+#### Phase 5: Workflow Integration (Not Started)
+
+8. Expand `DailyDigestWorkflow` from placeholders to real activity invocations:
+     - Replace TODO blocks with `workflow.execute_activity` calls referencing implemented batch activities
+     - Introduce structured aggregation of per-activity observability (sum AI calls, accumulate errors)
+     - Implement relevance phase using real articles rather than empty list once earlier phases exist
+9. Add email assembly + send + delivery record activities (scoped for later milestone, optional for MVP if digest generation validated separately)
 
 #### Phase 6: Documentation Updates
 
-9. Toggle `docs/temporal-workflows.md` activity rows from “planned” to “implemented” once modules land.
-10. Update `docs/processors/content_processing.md` and `docs/processors/relevance_scorer.md` with concrete references to the new activity and cache behavior.
-11. Update `backend/docs/plan_status/status_board.md` when integration reaches green status.
+9. Toggle `docs/temporal-workflows.md` activity rows from “planned” to “implemented” as each new activity ships (normalizer, quality, topics, summarizer, etc.).
+10. Update `docs/processors/content_processing.md` and `docs/processors/relevance_scorer.md` with cross-links once end-to-end chain validated (add section on batch activity interfaces & cache strategy).
+11. Update `backend/docs/plan_status/status_board.md` when Phase 4 turns green (end-to-end metadata test passing) and again after workflow orchestration moves to Phase 5.
 
 ### Success Criteria
 
@@ -128,16 +145,16 @@ app/temporal/
 - ✅ Minimal workflow stub exists (app/temporal/workflows.py - 195 lines with complete TODO sequence)
 - ✅ Serialization tested (tests/test_temporal/test_workflow_integration.py - 105 lines)
 
-**Phase 2-3 (Complete - 2025-10-13)**:
+**Phase 2-3 (Complete - 2025-10-14)**:
 
-- ✅ Activity `score_relevance_batch` implementation (app/temporal/activities/processing.py:88-204)
-- ✅ ProfileRepository created for database access (app/repositories/profile_repository.py)
-- ✅ Cache key hashing: SHA256 of profile content + article URL for cross-user cache sharing
-- ✅ Activity passes 6 integration tests covering happy path, idempotency, errors (tests/test_temporal/test_activities_processing.py)
-- ✅ Graceful error handling: continues on partial failures, tracks errors_count
-- ✅ Observability metrics: ai_calls (only actual calls), cache_hits, errors_count, timestamps
-- ✅ Idempotency verified: cache key based on profile content hash prevents redundant scoring
-- ✅ Documentation updated (`temporal-workflows.md` activity matrix marked ✅)
+- ✅ Activity `score_relevance_batch` implementation (see `app/temporal/activities/processing.py`)
+- ✅ ProfileRepository for profile lookups (`app/repositories/profile_repository.py`)
+- ✅ Cache key hashing: SHA256 of sorted profile keywords + threshold + boost_factor + article URL
+- ✅ Test suite: coverage for idempotency, cache behavior, AI fallback, partial failure (`tests/test_temporal/test_activities_processing.py`)
+- ✅ Graceful per-article error handling & metrics (`errors_count`, `cache_hits`, `ai_calls`, timestamps)
+- ✅ `temporal-workflows.md` updated (activity row marked ✅)
+- ⚠️ Only relevance batch activity implemented; other planned activities remain in 'planned' state
+- ⚠️ Workflow orchestrator still placeholder (does not execute full pipeline yet)
 
 ### Out of Scope (Tracked Separately)
 

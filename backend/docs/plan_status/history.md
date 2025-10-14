@@ -1,5 +1,24 @@
 # Backend Workstream History
 
+## 2025-10-14
+
+### Code Quality Improvements
+
+- Removed auto-commit from `get_async_session()` to give callers explicit transaction control.
+- Deleted unused `initial_ai_count` variable from batch relevance scoring activity.
+- Stripped verbose docstrings from `ProfileRepository` (type hints + clear names = self-documenting).
+- Documented SQLModel forward reference limitation: must use `Optional["Class"]` instead of `"Class" | None` for Relationship fields.
+
+### Documentation Updates
+
+- Updated `docs/design-patterns.md` Section 3 (Session Management) to document explicit commit pattern.
+- Added `docs/design-patterns.md` Section 4 (Type Annotations & SQLModel Constraints) with technical explanation and examples.
+- 258 tests passing, all changes non-breaking.
+
+### Key File Changes
+
+- Modified: `app/database.py` (removed auto-commit), `app/temporal/activities/processing.py` (cleanup), `app/repositories/profile_repository.py` (docstring reduction), `docs/design-patterns.md` (technical constraints).
+
 ## 2025-10-12
 
 ### Processor Refactor

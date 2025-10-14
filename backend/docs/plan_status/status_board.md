@@ -4,7 +4,7 @@ Legend: 🟢 Complete | 🟡 In Progress | ⏳ Pending | ⚠️ Blocked
 
 | Workstream | Owner | Status | Next Action | Updated |
 | --- | --- | --- | --- | --- |
-| Personalization pipeline integration | TBD | 🟡 In Progress | Implement `score_relevance_batch` activity with RelevanceScorer integration and cache-based idempotency (Phase 2-3). | 2025-10-12 |
+| Personalization pipeline integration | TBD | 🟡 In Progress | Relevance batch activity + tests done; implement remaining normalization/quality/topic activities & end-to-end metadata test (Phase 4). | 2025-10-14 |
 | Processor telemetry & metrics | TBD | ⏳ Pending | Select metrics sink + dashboards; instrument processors once sink is ready. | 2025-10-11 |
 | Digest assembly enhancements | TBD | 🟡 In Progress | Layer relevance-threshold filtering and quality-score ordering ahead of email render. | 2025-10-11 |
 | Workflow observability | TBD | 🟡 In Progress | Add Temporal alerting plus Prometheus exporters; document dashboards in `docs/operations.md`. | 2025-10-11 |
