@@ -128,13 +128,16 @@ app/temporal/
 - ✅ Minimal workflow stub exists (app/temporal/workflows.py - 195 lines with complete TODO sequence)
 - ✅ Serialization tested (tests/test_temporal/test_workflow_integration.py - 105 lines)
 
-**Phase 2-3 (Ready to Start)**:
+**Phase 2-3 (Complete - 2025-10-13)**:
 
-- ❌ Activity `score_relevance_batch` implementation
-- ❌ Activity passes 6+ integration tests covering happy path, idempotency, errors
-- ❌ Metadata fields flow correctly through pipeline orchestrator
-- ❌ Idempotency verified: cache guard (`profile.id` + `article.url`) prevents redundant scoring
-- ❌ Documentation updated in remaining places (`temporal-workflows.md`, `status_board.md`)
+- ✅ Activity `score_relevance_batch` implementation (app/temporal/activities/processing.py:88-204)
+- ✅ ProfileRepository created for database access (app/repositories/profile_repository.py)
+- ✅ Cache key hashing: SHA256 of profile content + article URL for cross-user cache sharing
+- ✅ Activity passes 6 integration tests covering happy path, idempotency, errors (tests/test_temporal/test_activities_processing.py)
+- ✅ Graceful error handling: continues on partial failures, tracks errors_count
+- ✅ Observability metrics: ai_calls (only actual calls), cache_hits, errors_count, timestamps
+- ✅ Idempotency verified: cache key based on profile content hash prevents redundant scoring
+- ✅ Documentation updated (`temporal-workflows.md` activity matrix marked ✅)
 
 ### Out of Scope (Tracked Separately)
 

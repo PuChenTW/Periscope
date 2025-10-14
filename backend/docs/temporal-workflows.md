@@ -22,7 +22,7 @@
 | `fetch_user_config` (planned) | `app/services/content.py` (pending module) | Fast (<5s) | 3 attempts, backoff 2s → 10s | Single DB read; no side effects. |
 | `fetch_sources_parallel` (planned) | `app/temporal/activities/content.py` (pending module) | Medium (30s) | 3 attempts, backoff 5s → 30s | Cache raw fetch results keyed by source ULID. |
 | `normalize_articles` (planned) | `app/temporal/activities/processing.py` (pending module) | Medium (30s) | 3 attempts, backoff 5s → 45s | Reuses cached processor outputs via Redis digest. |
-| `score_relevance` (planned) | `app/temporal/activities/processing.py` (pending module) | Medium (30s) | 2 attempts, backoff 10s → 40s | Skip if `article.metadata.relevance_score` exists; planned to key on profile/article cache. |
+| `score_relevance_batch` ✅ | `app/temporal/activities/processing.py` | Medium (30s) | 3 attempts, backoff 5s → 45s | Cache key: `relevance:{profile_hash}:{article_url}`. Profile hash includes keywords, threshold, boost_factor. |
 | `summarize_articles` (planned) | `app/temporal/activities/processing.py` (pending module) | Long (120s) | 2 attempts, backoff 15s → 120s | Uses AI cache; stores neutral summary on failure. |
 | `assemble_digest` (planned) | `app/services/digest.py` (pending module) | Fast | 1 attempt (no retry) | Pure data shaping. |
 | `send_email` (planned) | `app/temporal/activities/email.py` (pending module) | Medium | 4 attempts, backoff 10s → 2m | Email provider idempotency key = digest ULID + attempt. |
