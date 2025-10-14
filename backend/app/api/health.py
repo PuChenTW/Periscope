@@ -7,7 +7,7 @@ from sqlalchemy import text
 from sqlmodel.ext.asyncio.session import AsyncSession
 from temporalio.client import Client
 
-from app.api.basic import get_db_session
+from app.database import get_async_session
 from app.temporal.client import get_temporal_client
 from app.utils.redis_client import get_redis_client
 
@@ -21,12 +21,12 @@ async def health_check():
 
 @router.get("/ready")
 async def readiness_check(
-    db: Annotated[AsyncSession, Depends(get_db_session)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
     redis: Annotated[Redis, Depends(get_redis_client)],
     temporal_client: Annotated[Client, Depends(get_temporal_client)],
 ):
     try:
-        await db.exec(text("SELECT 1"))
+        await session.exec(text("SELECT 1"))
         await redis.ping()
         health = await temporal_client.service_client.check_health()
         if not health:
