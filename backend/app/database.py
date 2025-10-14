@@ -1,3 +1,4 @@
+from collections.abc import AsyncGenerator
 from functools import cache
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -7,14 +8,30 @@ from app.config import get_settings
 
 
 @cache
-def create_engine_and_session():
-    """Create the async engine and session maker."""
+def get_engine():
     settings = get_settings()
-    engine = create_async_engine(settings.database.url, echo=settings.debug, future=True)
+    return create_async_engine(settings.database.url, echo=settings.debug, future=True)
 
-    async_session = async_sessionmaker(
-        bind=engine,
+
+@cache
+def get_async_sessionmaker():
+    return async_sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        bind=get_engine(),
         class_=AsyncSession,
         expire_on_commit=False,
     )
-    return engine, async_session
+
+
+async def get_async_session() -> AsyncGenerator[AsyncSession]:
+    session_maker = get_async_sessionmaker()
+    async with session_maker() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()

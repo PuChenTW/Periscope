@@ -1,11 +1,11 @@
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlmodel import Field, func
 from ulid import ULID
 
 
 def utc_now() -> datetime:
-    return datetime.now(UTC)
+    return datetime.now()
 
 
 class ULIDMixedIn:

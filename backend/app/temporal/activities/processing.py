@@ -14,8 +14,8 @@ from pydantic import BaseModel, Field
 from temporalio import activity
 
 from app.config import get_settings
-from app.database import create_engine_and_session
-from app.exceptions import ExternalServiceError, ValidationError
+from app.database import get_async_sessionmaker
+from app.exceptions import ValidationError
 from app.processors.ai_provider import create_ai_provider
 from app.processors.fetchers.base import Article
 from app.processors.relevance_scorer import RelevanceResult, RelevanceScorer
@@ -120,7 +120,7 @@ async def score_relevance_batch(request: BatchRelevanceRequest) -> BatchRelevanc
     # Initialize dependencies
     settings = get_settings()
     redis_client = get_redis_client()
-    _, async_session_maker = create_engine_and_session()
+    async_session_maker = get_async_sessionmaker()
 
     # Fetch profile from database
     async with async_session_maker() as session:

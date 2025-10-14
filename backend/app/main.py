@@ -7,7 +7,6 @@ from loguru import logger
 
 from app.api import auth, digest, health, users
 from app.config import get_settings
-from app.middlewares import ORMSessionMiddleware
 from app.utils.redis_client import get_redis_client
 
 
@@ -38,7 +37,6 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
-    app.add_middleware(ORMSessionMiddleware)
 
     app.include_router(health.router, prefix="/health", tags=["health"])
     app.include_router(auth.router, prefix="/auth", tags=["authentication"])

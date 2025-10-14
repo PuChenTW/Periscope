@@ -1,6 +1,5 @@
 import copy
 import os
-from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -8,15 +7,14 @@ import pytest_asyncio
 from fakeredis import FakeAsyncRedis
 from fastapi.testclient import TestClient
 from pytest_mock_resources import PostgresConfig, create_postgres_fixture
-from sqlmodel import SQLModel
-from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlmodel import SQLModel, create_engine
 
-from app.database import create_engine_and_session
 from app.main import create_app
 from app.temporal.client import get_temporal_client
 from app.utils.redis_client import get_redis_client
 
-postgress = create_postgres_fixture(scope="session")
+postgress = create_postgres_fixture(scope="session", async_=True)
 
 
 @pytest.fixture(scope="session")
@@ -28,7 +26,7 @@ def pmr_postgres_config(worker_id):
         username="root",
         password="password",
         root_database=f"periscope_{worker_id}",
-        drivername="postgresql+psycopg",
+        drivername="postgresql+asyncpg",
     )
 
 
@@ -58,37 +56,58 @@ def override_environment(database_url):
     os.environ.update(original_environ)
 
 
+@pytest.fixture(autouse=True)
+def setup_database(override_environment, postgress):
+    """
+    Ensures that the database schema is created before any tests run
+    and dropped after all tests complete.
+    """
+    # Clear cache first to ensure fresh engine for each test session
+    engine = create_engine(
+        os.environ["DATABASE__URL"].replace("asyncpg", "psycopg"),
+        echo=False,
+        future=True,
+    )
+
+    try:
+        SQLModel.metadata.drop_all(engine)
+        SQLModel.metadata.create_all(engine)
+        yield
+    finally:
+        SQLModel.metadata.drop_all(engine)
+        engine.dispose()
+
+
 @pytest_asyncio.fixture
-async def session(postgress, override_environment) -> AsyncGenerator[AsyncSession]:
-    """
-    The test session that will be used in the tests.
-    """
+async def session(setup_database, override_environment):
+    engine = create_async_engine(os.environ["DATABASE__URL"], echo=False, future=True)
+    session_maker = async_sessionmaker(bind=engine)
 
-    engine, async_session = create_engine_and_session()
-
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.drop_all)
-        await conn.run_sync(SQLModel.metadata.create_all)
-
-        async with async_session() as session_:
-            try:
-                yield session_
-            except Exception:
-                await session_.rollback()
-                raise
-            finally:
-                await conn.run_sync(SQLModel.metadata.drop_all)
+    async with session_maker() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 
 
 @pytest_asyncio.fixture
 async def redis_client():
+    """Provides a fresh FakeAsyncRedis client for each test."""
     client = FakeAsyncRedis(decode_responses=True)
-    yield client
-    await client.aclose()
+    try:
+        yield client
+    finally:
+        # Ensure clean state between tests
+        await client.flushall()
+        await client.aclose()
 
 
 @pytest.fixture
-def client(session, redis_client):
+def client(redis_client):
     app = create_app()
     temporal_client = MagicMock()
     temporal_client.service_client = MagicMock()

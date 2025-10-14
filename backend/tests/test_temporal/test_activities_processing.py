@@ -17,7 +17,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.users import DigestConfiguration, InterestProfile, User
 from app.processors.fetchers.base import Article
-from app.processors.relevance_scorer import SemanticRelevanceResult
+from app.processors.relevance_scorer import RelevanceBreakdown, RelevanceResult, SemanticRelevanceResult
 from app.temporal.activities.processing import (
     BatchRelevanceRequest,
     compute_relevance_cache_key,
@@ -102,9 +102,7 @@ class TestScoreRelevanceBatch:
         ]
 
     @pytest_asyncio.fixture
-    async def sample_profile(self, session: AsyncSession):
-        """Create sample interest profile in database."""
-
+    async def sample_user(self, session: AsyncSession):
         # Create user
         user = User(
             email="test@example.com",
@@ -114,19 +112,24 @@ class TestScoreRelevanceBatch:
         session.add(user)
         await session.commit()
         await session.refresh(user)
+        return user
 
+    @pytest_asyncio.fixture
+    async def sample_digest_configuration(self, sample_user, session: AsyncSession):
         # Create digest config
         config = DigestConfiguration(
-            user_id=user.id,
+            user_id=sample_user.id,
             delivery_time=datetime.now(UTC).time(),
         )
         session.add(config)
         await session.commit()
         await session.refresh(config)
+        return config
 
-        # Create interest profile
+    @pytest_asyncio.fixture
+    async def sample_profile(self, sample_digest_configuration, session: AsyncSession):
         profile = InterestProfile(
-            config_id=config.id,
+            config_id=sample_digest_configuration.id,
             keywords=["python", "ai", "machine learning"],
             relevance_threshold=40,
             boost_factor=1.0,
@@ -137,8 +140,28 @@ class TestScoreRelevanceBatch:
 
         return profile
 
+    @pytest_asyncio.fixture
+    async def sample_empty_profile(self, sample_digest_configuration, session: AsyncSession):
+        profile = InterestProfile(
+            config_id=sample_digest_configuration.id,
+            keywords=[],
+            relevance_threshold=40,
+            boost_factor=1.0,
+        )
+        session.add(profile)
+        await session.commit()
+        await session.refresh(profile)
+
+        return profile
+
+    @pytest.fixture(autouse=True)
+    def patch_redis_client(self, redis_client):
+        """Patch get_redis_client to return test Redis client."""
+        with patch("app.temporal.activities.processing.get_redis_client", return_value=redis_client):
+            yield
+
     @pytest.mark.asyncio
-    async def test_score_relevance_batch_happy_path(self, sample_articles, sample_profile, redis_client):
+    async def test_score_relevance_batch_happy_path(self, sample_articles, sample_profile):
         """Test successful batch scoring with all articles."""
         # Mock AI provider
         with patch("app.temporal.activities.processing.create_ai_provider") as mock_ai_factory:
@@ -182,12 +205,12 @@ class TestScoreRelevanceBatch:
             assert str(sample_articles[1].url) in result.relevance_results
 
             # Verify scores are reasonable
-            for url, relevance_result in result.relevance_results.items():
+            for relevance_result in result.relevance_results.values():
                 assert 0 <= relevance_result.relevance_score <= 100
                 assert relevance_result.breakdown is not None
 
     @pytest.mark.asyncio
-    async def test_score_relevance_batch_idempotency(self, sample_articles, sample_profile, redis_client):
+    async def test_score_relevance_batch_idempotency(self, sample_articles, sample_profile):
         """Test that second call returns cached results."""
         # Mock AI provider
         with patch("app.temporal.activities.processing.create_ai_provider") as mock_ai_factory:
@@ -226,11 +249,8 @@ class TestScoreRelevanceBatch:
             assert result1.relevance_results.keys() == result2.relevance_results.keys()
 
     @pytest.mark.asyncio
-    async def test_score_relevance_batch_empty_profile(self, sample_articles, sample_profile, redis_client):
+    async def test_score_relevance_batch_empty_profile(self, sample_articles, sample_empty_profile):
         """Test handling of empty profile (no keywords)."""
-        # Update profile to have no keywords
-        sample_profile.keywords = []
-
         # Mock AI provider
         with patch("app.temporal.activities.processing.create_ai_provider") as mock_ai_factory:
             mock_provider = MagicMock()
@@ -238,7 +258,7 @@ class TestScoreRelevanceBatch:
             mock_ai_factory.return_value = mock_provider
 
             request = BatchRelevanceRequest(
-                profile_id=sample_profile.id,
+                profile_id=sample_empty_profile.id,
                 articles=sample_articles,
             )
 
@@ -251,7 +271,7 @@ class TestScoreRelevanceBatch:
                 assert relevance_result.passes_threshold is True
 
     @pytest.mark.asyncio
-    async def test_score_relevance_batch_ai_failure(self, sample_articles, sample_profile, redis_client):
+    async def test_score_relevance_batch_ai_failure(self, sample_articles, sample_profile):
         """Test graceful degradation when AI fails."""
         # Mock AI provider to raise exception
         with patch("app.temporal.activities.processing.create_ai_provider") as mock_ai_factory:
@@ -282,7 +302,7 @@ class TestScoreRelevanceBatch:
                 assert relevance_result.breakdown.semantic_score == 0.0
 
     @pytest.mark.asyncio
-    async def test_score_relevance_batch_partial_failure(self, sample_articles, sample_profile, redis_client):
+    async def test_score_relevance_batch_partial_failure(self, sample_articles, sample_profile):
         """Test handling when some articles fail to score."""
         # Create a bad article that will cause scoring to fail
         bad_article = Article(
@@ -311,13 +331,25 @@ class TestScoreRelevanceBatch:
             mock_provider.create_agent = create_agent_mock
             mock_ai_factory.return_value = mock_provider
 
-            # Patch scorer to fail on bad article
-            original_score = None
-
             async def mock_score_article(article, profile, quality_score=None):
                 if str(article.url) == str(bad_article.url):
                     raise Exception("Scoring failed for this article")
-                return await original_score(article, profile, quality_score)
+
+                breakdown = RelevanceBreakdown(
+                    keyword_score=0,
+                    semantic_score=0.0,
+                    temporal_boost=0,
+                    quality_boost=0,
+                    final_score=0,
+                    matched_keywords=[],
+                    threshold_passed=True,
+                )
+                return RelevanceResult(
+                    relevance_score=0,
+                    breakdown=breakdown,
+                    passes_threshold=True,
+                    matched_keywords=[],
+                )
 
             with patch("app.processors.relevance_scorer.RelevanceScorer.score_article", side_effect=mock_score_article):
                 request = BatchRelevanceRequest(

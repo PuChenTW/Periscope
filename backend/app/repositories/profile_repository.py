@@ -33,8 +33,8 @@ class ProfileRepository:
             InterestProfile if found, None otherwise
         """
         statement = select(InterestProfile).where(InterestProfile.id == profile_id)
-        result = await self.session.execute(statement)
-        return result.scalar_one_or_none()
+        result = await self.session.exec(statement)
+        return result.one_or_none()
 
     async def get_by_config_id(self, config_id: str) -> InterestProfile | None:
         """
@@ -47,5 +47,5 @@ class ProfileRepository:
             InterestProfile if found, None otherwise
         """
         statement = select(InterestProfile).where(InterestProfile.config_id == config_id)
-        result = await self.session.execute(statement)
-        return result.scalar_one_or_none()
+        result = await self.session.exec(statement)
+        return result.one_or_none()
