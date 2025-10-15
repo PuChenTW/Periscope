@@ -5,37 +5,34 @@ This module contains the main workflow orchestration logic for generating
 personalized daily reading digests.
 """
 
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from pydantic import BaseModel
 from temporalio import workflow
 
 from app.processors.fetchers.base import Article
 
 with workflow.unsafe.imports_passed_through():
+    from app.temporal import shared
     from app.temporal.activities.processing import BatchRelevanceRequest, score_relevance_batch
 
 
-@dataclass
-class DigestWorkflowInput:
+class DigestWorkflowInput(BaseModel):
     """
     Input parameters for daily digest workflow.
 
     Attributes:
         user_id: Unique identifier for the user
-        scheduled_time: When this digest was scheduled to run
         source_urls: List of RSS/blog URLs to fetch content from
         interest_keywords: User's interest keywords for relevance scoring
     """
 
     user_id: str
-    scheduled_time: datetime
     source_urls: list[str]
     interest_keywords: list[str]
 
 
-@dataclass
-class DigestWorkflowResult:
+class DigestWorkflowResult(BaseModel):
     """
     Result of daily digest workflow execution.
 
@@ -216,6 +213,7 @@ class DailyDigestWorkflow:
                 quality_scores=None,
             ),
             start_to_close_timeout=timedelta(seconds=5),
+            retry_policy=shared.FAST_RETRY_POLICY,
         )
 
         return DigestWorkflowResult(

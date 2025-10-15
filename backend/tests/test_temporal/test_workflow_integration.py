@@ -44,7 +44,6 @@ async def test_workflow_can_be_started():
     """
     workflow_input = DigestWorkflowInput(
         user_id="test_user_123",
-        scheduled_time=datetime.now(UTC),
         source_urls=["https://example.com/feed.xml"],
         interest_keywords=["technology", "AI", "Python"],
     )

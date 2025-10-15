@@ -21,9 +21,9 @@ LONG_TIMEOUT = 120
 # Non-retryable error types (fully-qualified module paths)
 # These exceptions abort workflow execution immediately without retry
 NON_RETRYABLE_ERROR_TYPES = [
-    NonRetryableError,
-    ValidationError,
-    ConfigurationError,
+    NonRetryableError.__name__,
+    ValidationError.__name__,
+    ConfigurationError.__name__,
 ]
 
 # Retry policies with exponential backoff (jitter disabled for determinism)

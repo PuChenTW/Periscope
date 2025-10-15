@@ -34,10 +34,6 @@ async def create_worker() -> Worker:
     settings = get_settings()
     client = await get_temporal_client()
 
-    # Import workflows and activities here to avoid top-level import cycles
-    # from app.temporal.activities.processing import score_relevance_batch
-    # from app.temporal.workflows import DailyDigestWorkflow
-
     try:
         worker = Worker(
             client,

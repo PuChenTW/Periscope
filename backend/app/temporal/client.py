@@ -15,6 +15,7 @@ from typing import Any
 
 from loguru import logger
 from temporalio.client import Client, WorkflowHandle
+from temporalio.contrib.pydantic import pydantic_data_converter
 
 from app.config import get_settings
 
@@ -56,6 +57,7 @@ async def get_temporal_client() -> Client:
                 temporal_config.server_url,
                 namespace=temporal_config.namespace,
                 identity=temporal_config.client_identity,
+                data_converter=pydantic_data_converter,
             )
             logger.info(
                 f"Connected to Temporal server at {temporal_config.server_url} (namespace: {temporal_config.namespace})"
@@ -189,3 +191,26 @@ async def cancel_workflow(
         error_msg = f"Failed to cancel workflow '{workflow_id}': {e}"
         logger.error(error_msg)
         raise RuntimeError(error_msg) from e
+
+
+if __name__ == "__main__":
+    import asyncio
+    from uuid import uuid4
+
+    from app.temporal.workflows import DigestWorkflowInput
+
+    async def main():
+        client = await get_temporal_client()
+        workflow_id = uuid4().hex
+        handle = await start_workflow(
+            client,
+            workflow_type="daily_digest",
+            workflow_id=workflow_id,
+            workflow_args=[DigestWorkflowInput(user_id="user_1", source_urls=[], interest_keywords=[])],
+        )
+        print(f"Started workflow with ID: {handle.id}, Run ID: {handle.run_id}")
+
+        status = await query_workflow_status(client, workflow_id)
+        print(f"Workflow status: {status}")
+
+    asyncio.run(main())
