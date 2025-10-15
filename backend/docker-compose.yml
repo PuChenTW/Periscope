@@ -66,9 +66,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://periscope:periscope_dev@postgres:5432/periscope
-      REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: dev_secret_key_change_in_production
+      DATABASE__URL: postgresql+asyncpg://periscope:periscope_dev@postgres:5432/periscope
+      REDIS__URL: redis://redis:6379/0
+      SECURITY__SECRET_KEY: dev_secret_key_change_in_production
       DEBUG: "true"
       TEMPORAL__SERVER_URL: temporal:7233
       TEMPORAL__NAMESPACE: default
@@ -87,9 +87,9 @@ services:
   worker:
     build: .
     environment:
-      DATABASE_URL: postgresql+asyncpg://periscope:periscope_dev@postgres:5432/periscope
-      REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: dev_secret_key_change_in_production
+      DATABASE__URL: postgresql+asyncpg://periscope:periscope_dev@postgres:5432/periscope
+      REDIS__URL: redis://redis:6379/0
+      SECURITY__SECRET_KEY: dev_secret_key_change_in_production
       DEBUG: "true"
       TEMPORAL__SERVER_URL: temporal:7233
       TEMPORAL__NAMESPACE: default
