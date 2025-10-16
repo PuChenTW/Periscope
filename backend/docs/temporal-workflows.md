@@ -21,9 +21,11 @@
 | --- | --- | --- | --- | --- |
 | `fetch_user_config` (planned) | `app/services/content.py` (pending module) | Fast (<5s) | 3 attempts, backoff 2s → 10s | Single DB read; no side effects. |
 | `fetch_sources_parallel` (planned) | `app/temporal/activities/content.py` (pending module) | Medium (30s) | 3 attempts, backoff 5s → 30s | Cache raw fetch results keyed by source ULID. |
-| `normalize_articles` (planned) | `app/temporal/activities/processing.py` (pending module) | Medium (30s) | 3 attempts, backoff 5s → 45s | Reuses cached processor outputs via Redis digest. |
-| `score_relevance_batch` ✅ | `app/temporal/activities/processing.py` | Medium (30s) | 3 attempts, backoff 5s → 45s | Cache key: `relevance:{profile_hash}:{article_url}`. Profile hash includes keywords, threshold, boost_factor. |
-| `summarize_articles` (planned) | `app/temporal/activities/processing.py` (pending module) | Long (120s) | 2 attempts, backoff 15s → 120s | Uses AI cache; stores neutral summary on failure. |
+| `normalize_articles_batch` ✅ | `app/temporal/activities/processing.py:109` | Medium (30s) | 3 attempts, backoff 5s → 45s | Cache key: `spam:{sha256(title+content[:1000])[:16]}`. Caches spam detection results. TTL: 1440 min. |
+| `score_quality_batch` ✅ | `app/temporal/activities/processing.py:201` | Long (120s) | 2 attempts, backoff 15s → 120s | Cache key: `quality:{sha256(url)[:16]}`. Stores hybrid quality scores. TTL: 720 min. |
+| `extract_topics_batch` ✅ | `app/temporal/activities/processing.py:296` | Long (120s) | 2 attempts, backoff 15s → 120s | Cache key: `topics:{sha256(url)[:16]}`. Caches AI-extracted topics. TTL: 1440 min. |
+| `score_relevance_batch` ✅ | `app/temporal/activities/processing.py:399` | Medium (30s) | 3 attempts, backoff 5s → 45s | Cache key: `relevance:{profile_hash}:{article_url}`. Profile hash includes keywords, threshold, boost_factor. TTL: 720 min. |
+| `summarize_articles` (planned) | `app/temporal/activities/processing.py` (pending implementation) | Long (120s) | 2 attempts, backoff 15s → 120s | Uses AI cache; stores neutral summary on failure. |
 | `assemble_digest` (planned) | `app/services/digest.py` (pending module) | Fast | 1 attempt (no retry) | Pure data shaping. |
 | `send_email` (planned) | `app/temporal/activities/email.py` (pending module) | Medium | 4 attempts, backoff 10s → 2m | Email provider idempotency key = digest ULID + attempt. |
 | `record_delivery` (planned) | `app/temporal/activities/status.py` (pending module) | Fast | 3 attempts | UPSERT on delivery status table keyed by (user_id, delivery_date). |

@@ -13,8 +13,55 @@ from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from app.temporal.activities.processing import BatchRelevanceRequest, BatchRelevanceResult
+from app.temporal.activities.processing import (
+    BatchNormalizationRequest,
+    BatchNormalizationResult,
+    BatchQualityRequest,
+    BatchQualityResult,
+    BatchRelevanceRequest,
+    BatchRelevanceResult,
+    BatchTopicExtractionRequest,
+    BatchTopicExtractionResult,
+)
 from app.temporal.workflows import DailyDigestWorkflow, DigestWorkflowInput
+
+
+@activity.defn(name="normalize_articles_batch")
+async def normalize_articles_batch_mock(request: BatchNormalizationRequest) -> BatchNormalizationResult:
+    return BatchNormalizationResult(
+        articles=request.articles,
+        total_processed=len(request.articles),
+        rejected_count=0,
+        spam_detected_count=0,
+        start_timestamp=datetime.now(UTC),
+        end_timestamp=datetime.now(UTC),
+        ai_calls=0,
+        errors_count=0,
+    )
+
+
+@activity.defn(name="score_quality_batch")
+async def score_quality_batch_mock(request: BatchQualityRequest) -> BatchQualityResult:
+    return BatchQualityResult(
+        articles=request.articles,
+        quality_results={},
+        start_timestamp=datetime.now(UTC),
+        end_timestamp=datetime.now(UTC),
+        ai_calls=0,
+        errors_count=0,
+    )
+
+
+@activity.defn(name="extract_topics_batch")
+async def extract_topics_batch_mock(request: BatchTopicExtractionRequest) -> BatchTopicExtractionResult:
+    return BatchTopicExtractionResult(
+        articles=request.articles,
+        topic_results={},
+        start_timestamp=datetime.now(UTC),
+        end_timestamp=datetime.now(UTC),
+        ai_calls=0,
+        errors_count=0,
+    )
 
 
 @activity.defn(name="score_relevance_batch")
@@ -33,6 +80,7 @@ async def score_relevance_batch_mock(request: BatchRelevanceRequest) -> BatchRel
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(20)
 async def test_workflow_can_be_started():
     """
     Test that workflow stub can be instantiated and started.
@@ -50,7 +98,17 @@ async def test_workflow_can_be_started():
 
     async with (
         await WorkflowEnvironment.start_time_skipping(data_converter=pydantic_data_converter) as env,
-        Worker(env.client, task_queue="tq1", workflows=[DailyDigestWorkflow], activities=[score_relevance_batch_mock]),
+        Worker(
+            env.client,
+            task_queue="tq1",
+            workflows=[DailyDigestWorkflow],
+            activities=[
+                normalize_articles_batch_mock,
+                score_quality_batch_mock,
+                extract_topics_batch_mock,
+                score_relevance_batch_mock,
+            ],
+        ),
     ):
         result = await env.client.execute_workflow(DailyDigestWorkflow.run, workflow_input, id="wf1", task_queue="tq1")
 
