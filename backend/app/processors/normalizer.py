@@ -1,107 +1,58 @@
 """
 Content normalization service for standardizing article structure and metadata.
 
-This module provides business-level validation and enrichment beyond what the RSS
-fetcher provides, ensuring consistent data quality before AI processing.
+This module provides metadata enrichment and standardization for articles,
+assuming articles have already been validated upstream.
 """
 
-import textwrap
 from datetime import UTC
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from loguru import logger
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import HttpUrl
 
 from app.config import ContentNormalizationSettings, get_settings
-from app.processors.ai_provider import AIProvider, create_ai_provider
 from app.processors.fetchers.base import Article
-
-
-class SpamDetectionResult(BaseModel):
-    """AI-powered spam detection result with reasoning."""
-
-    is_spam: bool = Field(description="Whether the content is spam")
-    confidence: float = Field(description="Confidence score (0.0-1.0)")
-    reasoning: str = Field(description="Explanation of the spam determination")
 
 
 class ContentNormalizer:
     """
-    Normalizes article content and metadata for consistent processing.
+    Normalizes article metadata for consistent processing.
 
-    This class ensures articles meet quality standards and have standardized
-    structure before AI processing. It never raises exceptions - uses fallbacks
-    and logs warnings instead.
+    Assumes articles are already validated upstream. Handles date normalization,
+    metadata standardization (title, author, tags, URL), and content length enforcement.
+    Never raises exceptions - uses fallbacks and logs warnings instead.
     """
 
-    def __init__(
-        self,
-        settings: ContentNormalizationSettings | None = None,
-        ai_provider: AIProvider | None = None,
-    ):
+    def __init__(self, settings: ContentNormalizationSettings | None = None):
         """
-        Initialize normalizer with configuration and AI provider.
+        Initialize normalizer with configuration.
 
         Args:
             settings: Content normalization settings (uses get_settings().content if not provided)
-            ai_provider: AI provider instance (creates default if not provided)
         """
         self.settings = settings or get_settings().content
 
         # Extract individual fields for convenience
-        self.content_min_length = self.settings.min_length
         self.content_max_length = self.settings.max_length
-        self.spam_detection_enabled = self.settings.spam_detection_enabled
         self.title_max_length = self.settings.title_max_length
         self.author_max_length = self.settings.author_max_length
         self.tag_max_length = self.settings.tag_max_length
         self.max_tags_per_article = self.settings.max_tags_per_article
 
-        # Create AI provider if not injected
-        provider = ai_provider or create_ai_provider(get_settings())
-
-        # Initialize PydanticAI agent for spam detection
-        self.spam_agent = provider.create_agent(
-            output_type=SpamDetectionResult,
-            system_prompt=textwrap.dedent("""\
-                You are an expert at detecting spam and low-quality content.
-                Your task is to analyze article content and determine if it is spam.
-
-                Spam indicators include:
-                - Excessive promotional language or calls to action
-                - Repeated characters, words, or phrases
-                - Misleading clickbait with no substance
-                - Excessive capitalization or punctuation
-                - Obvious advertising or marketing content
-                - Low-quality automated or bot-generated content
-                - Scam or fraudulent content patterns
-
-                Legitimate content that should NOT be marked as spam:
-                - News articles with some promotional elements
-                - Product announcements from legitimate companies
-                - Educational or informational content
-                - Opinion pieces or blog posts
-
-                Provide a confidence score (0.0-1.0) and clear reasoning for your determination.
-            """),
-        )
-
-    async def normalize(self, article: Article) -> Article | None:
+    def normalize(self, article: Article) -> Article:
         """
-        Normalize an article's content and metadata.
+        Normalize an article's metadata.
+
+        Assumes article is already validated upstream.
 
         Args:
-            article: Raw article from fetcher
+            article: Validated article from upstream
 
         Returns:
-            Normalized article, or None if article should be rejected
+            Normalized article with standardized metadata
         """
-        # Phase 1: Content validation - reject low-quality articles
-        if not await self._validate_content(article):
-            logger.debug(f"Article '{article.title[:50]}...' rejected during content validation")
-            return None
-
-        # Phase 1.5: Date normalization - ensure UTC-aware published_at
+        # Phase 1: Date normalization - ensure UTC-aware published_at
         article = self._normalize_date(article)
 
         # Phase 2: Metadata standardization
@@ -112,86 +63,6 @@ class ContentNormalizer:
         article = self._enforce_content_length(article)
 
         return article
-
-    async def _validate_content(self, article: Article) -> bool:
-        """
-        Validate whether an Article's textual content meets minimum quality standards before further processing.
-
-        Quality checks performed (in order):
-        1. Non-empty content: Rejects if content is None, empty, or only whitespace.
-        2. Minimum length: Rejects if stripped content length is below the configured
-            threshold (self.settings.content_min_length). This prevents extremely short,
-            low-signal items such as placeholders or link stubs.
-        3. AI-powered spam detection (optional): If spam detection is enabled
-            (self.settings.spam_detection_enabled), uses AI to identify spam content
-            patterns including promotional content, scams, and low-quality automated content.
-
-        Args:
-            article: Article to validate
-
-        Returns:
-            True if content is valid, False if should be rejected
-        """
-        # Check for empty or whitespace-only content
-        if not article.content or not article.content.strip():
-            logger.debug(f"Article '{article.title[:50]}...' has empty content")
-            return False
-
-        # Check minimum content length
-        content_length = len(article.content.strip())
-        if content_length < self.content_min_length:
-            logger.debug(
-                f"Article '{article.title[:50]}...' content too short "
-                f"({content_length} chars, minimum {self.content_min_length})"
-            )
-            return False
-
-        # Check for spam using AI if enabled
-        if self.spam_detection_enabled and await self._detect_spam(article):
-            logger.debug(f"Article '{article.title[:50]}...' detected as spam")
-            return False
-
-        return True
-
-    async def _detect_spam(self, article: Article) -> bool:
-        """
-        Detect spam content using AI-powered analysis.
-
-        Args:
-            article: Article to check for spam
-
-        Returns:
-            True if spam detected, False otherwise
-        """
-        # Truncate content to avoid token limits (use first 1000 chars)
-        content = article.content[:1000] if article.content else ""
-
-        # Build prompt for AI spam detection
-        prompt = textwrap.dedent(f"""\
-            Article Title: {article.title}
-            Content: {content}
-
-            Analyze this article and determine if it is spam or low-quality content.
-        """)
-
-        try:
-            # Run AI spam detection
-            result = await self.spam_agent.run(prompt)
-            detection_result = result.output
-
-            logger.debug(
-                f"Spam detection for '{article.title[:50]}...': "
-                f"is_spam={detection_result.is_spam}, "
-                f"confidence={detection_result.confidence:.2f}, "
-                f"reasoning={detection_result.reasoning}"
-            )
-
-            return detection_result.is_spam
-
-        except Exception as e:
-            logger.error(f"Error during AI spam detection for article '{article.title[:50]}...': {e}")
-            # On error, return False (not spam) to avoid false rejections
-            return False
 
     def _normalize_date(self, article: Article) -> Article:
         """

@@ -3,53 +3,22 @@ Tests for ContentNormalizer implementation
 """
 
 from datetime import UTC, datetime, timedelta, timezone
-from unittest.mock import MagicMock
 
 import pytest
 from pydantic import HttpUrl
-from pydantic_ai import Agent
-from pydantic_ai.models.test import TestModel
 
 from app.config import ContentNormalizationSettings
 from app.processors.fetchers.base import Article
-from app.processors.normalizer import ContentNormalizer, SpamDetectionResult
+from app.processors.normalizer import ContentNormalizer
 
 
 class TestContentNormalizer:
     """Test ContentNormalizer functionality."""
 
     @pytest.fixture
-    def mock_ai_provider(self):
-        """Create a mock AI provider for testing with pre-configured TestModel based on output_type."""
-        mock_provider = MagicMock()
-
-        def create_agent_mock(output_type, system_prompt):
-            # Return appropriate TestModel based on output_type for realistic default behavior
-            if output_type == SpamDetectionResult:
-                test_model = TestModel(
-                    custom_output_args=SpamDetectionResult(is_spam=False, confidence=0.9, reasoning="Valid article")
-                )
-            else:
-                # Default for unknown types
-                test_model = TestModel()
-
-            return Agent(test_model, output_type=output_type, system_prompt=system_prompt)
-
-        mock_provider.create_agent = create_agent_mock
-        return mock_provider
-
-    @pytest.fixture
-    def normalizer(self, mock_ai_provider):
+    def normalizer(self):
         """Create ContentNormalizer instance for testing with default settings."""
-        return ContentNormalizer(ai_provider=mock_ai_provider, settings=ContentNormalizationSettings(min_length=50))
-
-    @pytest.fixture
-    def normalizer_no_spam(self, mock_ai_provider):
-        """Create ContentNormalizer with spam detection disabled."""
-        return ContentNormalizer(
-            ai_provider=mock_ai_provider,
-            settings=ContentNormalizationSettings(min_length=50, spam_detection_enabled=False),
-        )
+        return ContentNormalizer(settings=ContentNormalizationSettings())
 
     @pytest.fixture
     def valid_article(self):
@@ -69,78 +38,15 @@ class TestContentNormalizer:
             tags=["AI", "OpenAI", "GPT"],
         )
 
-    @pytest.mark.asyncio
-    async def test_normalize_valid_article(self, normalizer, valid_article):
+    def test_normalize_valid_article(self, normalizer, valid_article):
         """Test normalization of a complete, valid article."""
-        result = await normalizer.normalize(valid_article)
+        result = normalizer.normalize(valid_article)
 
         assert result is not None
         assert result.title == valid_article.title
         assert result.content == valid_article.content
 
-    @pytest.mark.asyncio
-    async def test_normalize_empty_content(self, normalizer):
-        """Test rejection of article with empty content."""
-        article = Article(
-            title="Empty Content Article",
-            url=HttpUrl("https://example.com/empty"),
-            content="",
-            published_at=datetime(2024, 1, 15, 10, 0),
-            fetch_timestamp=datetime.now(UTC),
-        )
-
-        result = await normalizer.normalize(article)
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_normalize_whitespace_only_content(self, normalizer):
-        """Test rejection of article with only whitespace content."""
-        article = Article(
-            title="Whitespace Article",
-            url=HttpUrl("https://example.com/whitespace"),
-            content="   \n\t  \n   ",
-            published_at=datetime(2024, 1, 15, 10, 0),
-            fetch_timestamp=datetime.now(UTC),
-        )
-
-        result = await normalizer.normalize(article)
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_normalize_content_too_short(self, normalizer):
-        """Test rejection of article with content below minimum length."""
-        article = Article(
-            title="Short Article",
-            url=HttpUrl("https://example.com/short"),
-            content="Short.",  # Only 6 characters, below 50 char minimum
-            published_at=datetime(2024, 1, 15, 10, 0),
-            fetch_timestamp=datetime.now(UTC),
-        )
-
-        result = await normalizer.normalize(article)
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_normalize_content_exactly_minimum_length(self, normalizer):
-        """Test article with exactly minimum content length is accepted."""
-        # Create content that is exactly 50 characters (realistic text to avoid spam detection)
-        content = "The quick brown fox jumps over the lazy doggggggg."
-
-        article = Article(
-            title="Minimum Length Article",
-            url=HttpUrl("https://example.com/min"),
-            content=content,
-            published_at=datetime(2024, 1, 15, 10, 0),
-            fetch_timestamp=datetime.now(UTC),
-        )
-
-        result = await normalizer.normalize(article)
-
-        assert result is not None
-        assert len(result.content.strip()) == 50
-
-    @pytest.mark.asyncio
-    async def test_normalize_with_unicode_content(self, normalizer):
+    def test_normalize_with_unicode_content(self, normalizer):
         """Test handling of unicode characters in content."""
         content = (
             "这是一篇关于人工智能的文章。AI技术正在快速发展，影响着我们的日常生活。"  # noqa: RUF001
@@ -156,12 +62,11 @@ class TestContentNormalizer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
 
-    @pytest.mark.asyncio
-    async def test_normalize_with_emojis(self, normalizer):
+    def test_normalize_with_emojis(self, normalizer):
         """Test handling of emoji characters in content."""
         content = (
             "Technology companies are innovating rapidly 🚀. The new AI models show impressive capabilities 🤖. "
@@ -177,56 +82,11 @@ class TestContentNormalizer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
 
-    @pytest.mark.asyncio
-    async def test_spam_detection_enabled(self, normalizer):
-        """Test spam detection for excessive uppercase content."""
-        # Create content with >70% uppercase letters
-        spam_content = "BUY NOW!!! THIS IS AN AMAZING DEAL!!! " * 10
-
-        article = Article(
-            title="Spam Article",
-            url=HttpUrl("https://example.com/spam"),
-            content=spam_content,
-            published_at=datetime(2024, 1, 15, 10, 0),
-            fetch_timestamp=datetime.now(UTC),
-        )
-
-        # Mock AI to return spam
-        test_model = TestModel(
-            custom_output_args=SpamDetectionResult(
-                is_spam=True, confidence=0.98, reasoning="Excessive uppercase and promotional language"
-            )
-        )
-
-        with normalizer.spam_agent.override(model=test_model):
-            result = await normalizer.normalize(article)
-
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_spam_detection_disabled(self, normalizer_no_spam):
-        """Test that spam detection can be disabled via settings."""
-        # Create obvious spam content
-        spam_content = "BUY NOW!!! CLICK HERE!!! " * 20
-
-        article = Article(
-            title="Spam Article",
-            url=HttpUrl("https://example.com/spam"),
-            content=spam_content,
-            published_at=datetime(2024, 1, 15, 10, 0),
-            fetch_timestamp=datetime.now(UTC),
-        )
-
-        result = await normalizer_no_spam.normalize(article)
-        # Should NOT be rejected since spam detection is disabled
-        assert result is not None
-
-    @pytest.mark.asyncio
-    async def test_normalize_article_with_minimal_metadata(self, normalizer):
+    def test_normalize_article_with_minimal_metadata(self, normalizer):
         """Test normalization of article with only required fields."""
         fetch_timestamp = datetime.now(UTC)
         article = Article(
@@ -239,7 +99,7 @@ class TestContentNormalizer:
             fetch_timestamp=fetch_timestamp,
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
         assert result.title == "Minimal Article"
@@ -248,10 +108,9 @@ class TestContentNormalizer:
         assert result.published_at == fetch_timestamp
         assert result.tags == []
 
-    @pytest.mark.asyncio
-    async def test_normalize_preserves_article_fields(self, normalizer, valid_article):
+    def test_normalize_preserves_article_fields(self, normalizer, valid_article):
         """Test that normalization preserves all article fields."""
-        result = await normalizer.normalize(valid_article)
+        result = normalizer.normalize(valid_article)
 
         assert result is not None
         assert result.title == valid_article.title
@@ -271,8 +130,7 @@ class TestContentNormalizer:
 
     # ========== Metadata Normalization Tests ==========
 
-    @pytest.mark.asyncio
-    async def test_normalize_title_whitespace_cleanup(self, normalizer):
+    def test_normalize_title_whitespace_cleanup(self, normalizer):
         """Test title whitespace normalization."""
         article = Article(
             title="  Multiple   spaces   and\n  newlines  ",
@@ -281,18 +139,16 @@ class TestContentNormalizer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
         assert result.title == "Multiple spaces and newlines"
 
-    @pytest.mark.asyncio
-    async def test_normalize_title_truncation(self, mock_ai_provider):
+    def test_normalize_title_truncation(self):
         """Test title truncation at word boundary."""
         # Need custom title_max_length, so create a specific normalizer
         normalizer = ContentNormalizer(
-            settings=ContentNormalizationSettings(title_max_length=50, min_length=50),
-            ai_provider=mock_ai_provider,
+            settings=ContentNormalizationSettings(title_max_length=50),
         )
 
         long_title = "This is a very long title that definitely exceeds fifty characters and should be truncated"
@@ -304,15 +160,14 @@ class TestContentNormalizer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
         assert len(result.title) <= 53  # 50 + "..."
         assert result.title.endswith("...")
         assert " " not in result.title[47:]  # No partial words before ...
 
-    @pytest.mark.asyncio
-    async def test_normalize_title_empty_fallback(self, normalizer):
+    def test_normalize_title_empty_fallback(self, normalizer):
         """Test empty title fallback to 'Untitled Article'."""
 
         article = Article(
@@ -322,13 +177,12 @@ class TestContentNormalizer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
         assert result.title == "Untitled Article"
 
-    @pytest.mark.asyncio
-    async def test_normalize_author_title_case(self, normalizer):
+    def test_normalize_author_title_case(self, normalizer):
         """Test author name title case normalization."""
 
         article = Article(
@@ -339,18 +193,15 @@ class TestContentNormalizer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
         assert result.author == "John Doe"
 
-    @pytest.mark.asyncio
-    async def test_normalize_author_truncation(self, mock_ai_provider):
+    def test_normalize_author_truncation(self):
         """Test author name truncation."""
         # Need custom author_max_length, so create a specific normalizer
-        normalizer = ContentNormalizer(
-            ai_provider=mock_ai_provider, settings=ContentNormalizationSettings(author_max_length=30, min_length=50)
-        )
+        normalizer = ContentNormalizer(settings=ContentNormalizationSettings(author_max_length=30))
 
         long_author = "Dr. Johnathan Christopher Alexander Davidson III"
 
@@ -362,14 +213,13 @@ class TestContentNormalizer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
         assert len(result.author) <= 33  # 30 + "..."
         assert result.author.endswith("...")
 
-    @pytest.mark.asyncio
-    async def test_normalize_tags_deduplication(self, normalizer):
+    def test_normalize_tags_deduplication(self, normalizer):
         """Test tag deduplication and normalization."""
 
         article = Article(
@@ -380,7 +230,7 @@ class TestContentNormalizer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
         assert len(result.tags) == 3
@@ -390,13 +240,11 @@ class TestContentNormalizer:
         # No duplicates
         assert result.tags.count("ai") == 1
 
-    @pytest.mark.asyncio
-    async def test_normalize_tags_max_limit(self, mock_ai_provider):
+    def test_normalize_tags_max_limit(self):
         """Test max tags per article limit."""
         # Need custom max_tags_per_article, so create a specific normalizer
         normalizer = ContentNormalizer(
-            ai_provider=mock_ai_provider,
-            settings=ContentNormalizationSettings(min_length=50, max_tags_per_article=5),
+            settings=ContentNormalizationSettings(max_tags_per_article=5),
         )
 
         tags = [f"tag{i}" for i in range(25)]  # 25 tags
@@ -409,18 +257,15 @@ class TestContentNormalizer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
         assert len(result.tags) == 5  # Limited to 5
 
-    @pytest.mark.asyncio
-    async def test_normalize_tags_length_limit(self, mock_ai_provider):
+    def test_normalize_tags_length_limit(self):
         """Test individual tag length limit."""
         # Need custom tag_max_length, so create a specific normalizer
-        normalizer = ContentNormalizer(
-            ai_provider=mock_ai_provider, settings=ContentNormalizationSettings(tag_max_length=20, min_length=50)
-        )
+        normalizer = ContentNormalizer(settings=ContentNormalizationSettings(tag_max_length=20))
 
         long_tag = "this-is-a-very-long-tag-that-exceeds-limit"
 
@@ -432,14 +277,13 @@ class TestContentNormalizer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
         assert len(result.tags[0]) == 20  # Truncated
         assert result.tags[1] == "short"
 
-    @pytest.mark.asyncio
-    async def test_normalize_url_remove_tracking_params(self, normalizer):
+    def test_normalize_url_remove_tracking_params(self, normalizer):
         """Test URL tracking parameter removal."""
 
         article = Article(
@@ -449,7 +293,7 @@ class TestContentNormalizer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
         url_str = str(result.url)
@@ -458,8 +302,7 @@ class TestContentNormalizer:
         assert "ref" not in url_str
         assert "id=123" in url_str  # Non-tracking param preserved
 
-    @pytest.mark.asyncio
-    async def test_normalize_url_upgrade_to_https(self, normalizer):
+    def test_normalize_url_upgrade_to_https(self, normalizer):
         """Test URL upgrade from http to https."""
 
         article = Article(
@@ -469,18 +312,15 @@ class TestContentNormalizer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
         assert str(result.url).startswith("https://")
 
-    @pytest.mark.asyncio
-    async def test_enforce_content_length_truncation(self, mock_ai_provider):
+    def test_enforce_content_length_truncation(self):
         """Test content truncation at word boundary."""
         # Need custom content_max_length, so create a specific normalizer
-        normalizer = ContentNormalizer(
-            ai_provider=mock_ai_provider, settings=ContentNormalizationSettings(max_length=200)
-        )
+        normalizer = ContentNormalizer(settings=ContentNormalizationSettings(max_length=200))
 
         long_content = "This is a test article with very long content. " * 20  # Much longer than 200 chars
 
@@ -491,7 +331,7 @@ class TestContentNormalizer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
         assert len(result.content) <= 200
@@ -500,8 +340,7 @@ class TestContentNormalizer:
 
     # ========== Date Normalization Tests ==========
 
-    @pytest.mark.asyncio
-    async def test_normalize_date_missing_published_at(self, normalizer):
+    def test_normalize_date_missing_published_at(self, normalizer):
         """Test that missing published_at falls back to fetch_timestamp."""
         fetch_timestamp = datetime.now(UTC)
         article = Article(
@@ -512,14 +351,13 @@ class TestContentNormalizer:
             fetch_timestamp=fetch_timestamp,
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
         assert result.published_at == fetch_timestamp
         assert result.published_at.tzinfo == UTC
 
-    @pytest.mark.asyncio
-    async def test_normalize_date_naive_datetime(self, normalizer):
+    def test_normalize_date_naive_datetime(self, normalizer):
         """Test that naive datetime is converted to UTC-aware."""
         naive_date = datetime(2024, 1, 15, 10, 30, 0)  # Naive (no timezone)
 
@@ -531,7 +369,7 @@ class TestContentNormalizer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
         assert result.published_at is not None
@@ -543,8 +381,7 @@ class TestContentNormalizer:
         assert result.published_at.hour == 10
         assert result.published_at.minute == 30
 
-    @pytest.mark.asyncio
-    async def test_normalize_date_non_utc_timezone(self, normalizer):
+    def test_normalize_date_non_utc_timezone(self, normalizer):
         """Test that non-UTC aware datetime is converted to UTC."""
         # Create a datetime in Eastern Time (UTC-5)
         eastern_date = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone(timedelta(hours=-5)))
@@ -557,7 +394,7 @@ class TestContentNormalizer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
         assert result.published_at is not None
@@ -566,8 +403,7 @@ class TestContentNormalizer:
         assert result.published_at.hour == 15
         assert result.published_at.minute == 30
 
-    @pytest.mark.asyncio
-    async def test_normalize_date_already_utc(self, normalizer):
+    def test_normalize_date_already_utc(self, normalizer):
         """Test that UTC-aware datetime is preserved unchanged."""
         utc_date = datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC)
 
@@ -579,14 +415,13 @@ class TestContentNormalizer:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        result = await normalizer.normalize(article)
+        result = normalizer.normalize(article)
 
         assert result is not None
         assert result.published_at == utc_date
         assert result.published_at.tzinfo == UTC
 
-    @pytest.mark.asyncio
-    async def test_normalize_date_never_none(self, normalizer):
+    def test_normalize_date_never_none(self, normalizer):
         """Test that published_at is never None after normalization."""
         # Test with various date scenarios
         test_articles = [
@@ -614,7 +449,7 @@ class TestContentNormalizer:
         ]
 
         for article in test_articles:
-            result = await normalizer.normalize(article)
+            result = normalizer.normalize(article)
             assert result is not None
             assert result.published_at is not None, f"published_at is None for article: {article.title}"
             assert result.published_at.tzinfo == UTC, f"published_at not UTC for: {article.title}"
