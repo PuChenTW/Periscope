@@ -17,17 +17,20 @@ from sqlmodel import Session
 from app.models.users import DigestConfiguration, InterestProfile, User
 from app.processors.fetchers.base import Article
 from app.processors.relevance_scorer import RelevanceBreakdown, RelevanceResult, SemanticRelevanceResult
-from app.temporal.activities.processing import (
-    BatchRelevanceRequest,
-    compute_relevance_cache_key,
-    score_relevance_batch,
-)
+from app.processors.validator import SpamDetectionResult
+from app.temporal.activities import schemas as sc
+from app.temporal.activities.processing import ProcessingActivities
 
 
 class TestComputeRelevanceCacheKey:
     """Test cache key computation."""
 
-    def test_cache_key_format(self):
+    @pytest.fixture
+    def activities(self):
+        """Create ProcessingActivities instance for testing."""
+        return ProcessingActivities()
+
+    def test_cache_key_format(self, activities):
         """Test cache key has correct format."""
         article = Article(
             title="Test Article",
@@ -36,7 +39,7 @@ class TestComputeRelevanceCacheKey:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        cache_key = compute_relevance_cache_key(
+        cache_key = activities._compute_relevance_cache_key(
             article,
             profile_keywords=["python", "ai"],
             relevance_threshold=40,
@@ -46,7 +49,7 @@ class TestComputeRelevanceCacheKey:
         assert cache_key.startswith("relevance:")
         assert str(article.url) in cache_key
 
-    def test_cache_key_same_profile_content(self):
+    def test_cache_key_same_profile_content(self, activities):
         """Test identical profile content produces same cache key."""
         article = Article(
             title="Test",
@@ -55,12 +58,12 @@ class TestComputeRelevanceCacheKey:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        key1 = compute_relevance_cache_key(article, ["python", "ai"], 40, 1.0)
-        key2 = compute_relevance_cache_key(article, ["python", "ai"], 40, 1.0)
+        key1 = activities._compute_relevance_cache_key(article, ["python", "ai"], 40, 1.0)
+        key2 = activities._compute_relevance_cache_key(article, ["python", "ai"], 40, 1.0)
 
         assert key1 == key2
 
-    def test_cache_key_different_keywords(self):
+    def test_cache_key_different_keywords(self, activities):
         """Test different keywords produce different cache keys."""
         article = Article(
             title="Test",
@@ -69,14 +72,19 @@ class TestComputeRelevanceCacheKey:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        key1 = compute_relevance_cache_key(article, ["python"], 40, 1.0)
-        key2 = compute_relevance_cache_key(article, ["java"], 40, 1.0)
+        key1 = activities._compute_relevance_cache_key(article, ["python"], 40, 1.0)
+        key2 = activities._compute_relevance_cache_key(article, ["java"], 40, 1.0)
 
         assert key1 != key2
 
 
 class TestScoreRelevanceBatch:
     """Test score_relevance_batch activity."""
+
+    @pytest.fixture
+    def activities(self):
+        """Create ProcessingActivities instance for testing."""
+        return ProcessingActivities()
 
     @pytest.fixture
     def sample_articles(self):
@@ -160,7 +168,7 @@ class TestScoreRelevanceBatch:
             yield
 
     @pytest.mark.asyncio
-    async def test_score_relevance_batch_happy_path(self, sample_articles, sample_profile):
+    async def test_score_relevance_batch_happy_path(self, activities, sample_articles, sample_profile):
         """Test successful batch scoring with all articles."""
         # Mock AI provider
         with patch("app.temporal.activities.processing.create_ai_provider") as mock_ai_factory:
@@ -179,8 +187,9 @@ class TestScoreRelevanceBatch:
 
             mock_provider.create_agent = create_agent_mock
             mock_ai_factory.return_value = mock_provider
+            activities.ai_provider = mock_provider
 
-            request = BatchRelevanceRequest(
+            request = sc.BatchRelevanceRequest(
                 profile_id=sample_profile.id,
                 articles=sample_articles,
                 quality_scores={
@@ -189,7 +198,7 @@ class TestScoreRelevanceBatch:
                 },
             )
 
-            result = await score_relevance_batch(request)
+            result = await activities.score_relevance_batch(request)
 
             # Verify result structure
             assert result.profile_id == sample_profile.id
@@ -209,7 +218,7 @@ class TestScoreRelevanceBatch:
                 assert relevance_result.breakdown is not None
 
     @pytest.mark.asyncio
-    async def test_score_relevance_batch_idempotency(self, sample_articles, sample_profile):
+    async def test_score_relevance_batch_idempotency(self, activities, sample_articles, sample_profile):
         """Test that second call returns cached results."""
         # Mock AI provider
         with patch("app.temporal.activities.processing.create_ai_provider") as mock_ai_factory:
@@ -229,18 +238,18 @@ class TestScoreRelevanceBatch:
             mock_provider.create_agent = create_agent_mock
             mock_ai_factory.return_value = mock_provider
 
-            request = BatchRelevanceRequest(
+            request = sc.BatchRelevanceRequest(
                 profile_id=sample_profile.id,
                 articles=sample_articles,
             )
 
             # First call - should score articles
-            result1 = await score_relevance_batch(request)
+            result1 = await activities.score_relevance_batch(request)
             assert result1.cache_hits == 0
             assert result1.total_scored == 2
 
             # Second call - should hit cache
-            result2 = await score_relevance_batch(request)
+            result2 = await activities.score_relevance_batch(request)
             assert result2.cache_hits == 2
             assert result2.total_scored == 2
 
@@ -248,7 +257,7 @@ class TestScoreRelevanceBatch:
             assert result1.relevance_results.keys() == result2.relevance_results.keys()
 
     @pytest.mark.asyncio
-    async def test_score_relevance_batch_empty_profile(self, sample_articles, sample_empty_profile):
+    async def test_score_relevance_batch_empty_profile(self, activities, sample_articles, sample_empty_profile):
         """Test handling of empty profile (no keywords)."""
         # Mock AI provider
         with patch("app.temporal.activities.processing.create_ai_provider") as mock_ai_factory:
@@ -256,12 +265,12 @@ class TestScoreRelevanceBatch:
             mock_provider.create_agent = MagicMock()
             mock_ai_factory.return_value = mock_provider
 
-            request = BatchRelevanceRequest(
+            request = sc.BatchRelevanceRequest(
                 profile_id=sample_empty_profile.id,
                 articles=sample_articles,
             )
 
-            result = await score_relevance_batch(request)
+            result = await activities.score_relevance_batch(request)
 
             # All articles should get score=0 but pass threshold
             assert result.total_scored == 2
@@ -270,7 +279,7 @@ class TestScoreRelevanceBatch:
                 assert relevance_result.passes_threshold is True
 
     @pytest.mark.asyncio
-    async def test_score_relevance_batch_ai_failure(self, sample_articles, sample_profile):
+    async def test_score_relevance_batch_ai_failure(self, activities, sample_articles, sample_profile):
         """Test graceful degradation when AI fails."""
         # Mock AI provider to raise exception
         with patch("app.temporal.activities.processing.create_ai_provider") as mock_ai_factory:
@@ -285,12 +294,12 @@ class TestScoreRelevanceBatch:
             mock_provider.create_agent = create_agent_mock
             mock_ai_factory.return_value = mock_provider
 
-            request = BatchRelevanceRequest(
+            request = sc.BatchRelevanceRequest(
                 profile_id=sample_profile.id,
                 articles=sample_articles,
             )
 
-            result = await score_relevance_batch(request)
+            result = await activities.score_relevance_batch(request)
 
             # Should still score articles with deterministic scoring (no AI)
             assert result.total_scored == 2
@@ -301,7 +310,7 @@ class TestScoreRelevanceBatch:
                 assert relevance_result.breakdown.semantic_score == 0.0
 
     @pytest.mark.asyncio
-    async def test_score_relevance_batch_partial_failure(self, sample_articles, sample_profile):
+    async def test_score_relevance_batch_partial_failure(self, activities, sample_articles, sample_profile):
         """Test handling when some articles fail to score."""
         # Create a bad article that will cause scoring to fail
         bad_article = Article(
@@ -351,12 +360,12 @@ class TestScoreRelevanceBatch:
                 )
 
             with patch("app.processors.relevance_scorer.RelevanceScorer.score_article", side_effect=mock_score_article):
-                request = BatchRelevanceRequest(
+                request = sc.BatchRelevanceRequest(
                     profile_id=sample_profile.id,
                     articles=articles,
                 )
 
-                result = await score_relevance_batch(request)
+                result = await activities.score_relevance_batch(request)
 
                 # Should have partial results (2 good articles)
                 assert result.total_scored == 2
@@ -364,7 +373,9 @@ class TestScoreRelevanceBatch:
                 assert str(bad_article.url) not in result.relevance_results
 
     @pytest.mark.asyncio
-    async def test_score_relevance_batch_cache_behavior(self, sample_articles, sample_profile, redis_client):
+    async def test_score_relevance_batch_cache_behavior(
+        self, activities, sample_articles, sample_profile, redis_client
+    ):
         """Test cache miss then cache hit behavior."""
         # Mock AI provider
         with patch("app.temporal.activities.processing.create_ai_provider") as mock_ai_factory:
@@ -384,18 +395,18 @@ class TestScoreRelevanceBatch:
             mock_provider.create_agent = create_agent_mock
             mock_ai_factory.return_value = mock_provider
 
-            request = BatchRelevanceRequest(
+            request = sc.BatchRelevanceRequest(
                 profile_id=sample_profile.id,
                 articles=[sample_articles[0]],
             )
 
             # First call - cache miss
-            result1 = await score_relevance_batch(request)
+            result1 = await activities.score_relevance_batch(request)
             assert result1.cache_hits == 0
             assert result1.total_scored == 1
 
             # Verify result was cached
-            cache_key = compute_relevance_cache_key(
+            cache_key = activities._compute_relevance_cache_key(
                 sample_articles[0],
                 sample_profile.keywords,
                 sample_profile.relevance_threshold,
@@ -405,10 +416,252 @@ class TestScoreRelevanceBatch:
             assert cached_value is not None
 
             # Second call - cache hit
-            result2 = await score_relevance_batch(request)
+            result2 = await activities.score_relevance_batch(request)
             assert result2.cache_hits == 1
             assert result2.total_scored == 1
 
             # Scores should match
             url = str(sample_articles[0].url)
             assert result1.relevance_results[url].relevance_score == result2.relevance_results[url].relevance_score
+
+
+class TestNormalizeArticlesBatch:
+    """Test normalize_articles_batch activity."""
+
+    @pytest.fixture
+    def activities(self):
+        """Create ProcessingActivities instance for testing."""
+        return ProcessingActivities()
+
+    @pytest.fixture
+    def sample_raw_articles(self):
+        """Create sample raw articles for testing."""
+        return [
+            Article(
+                title="  Valid Article Title  ",
+                url=HttpUrl("https://example.com/article1"),
+                content="This is a valid article with sufficient content length. " * 10,
+                fetch_timestamp=datetime.now(UTC),
+                author="  Author Name  ",
+                tags=["python", "  AI  ", ""],
+            ),
+            Article(
+                title="Another Good Article",
+                url=HttpUrl("https://example.com/article2"),
+                content="Another valid article with good content. " * 10,
+                fetch_timestamp=datetime.now(UTC),
+                published_at=datetime.now(UTC),
+            ),
+        ]
+
+    @pytest.fixture
+    def spam_article(self):
+        """Create a spam article for testing."""
+        return Article(
+            title="Buy cheap products now!!!",
+            url=HttpUrl("https://spam.example.com/ads"),
+            content="Click here for amazing deals! Limited time offer! Buy now! " * 5,
+            fetch_timestamp=datetime.now(UTC),
+        )
+
+    @pytest.fixture
+    def invalid_articles(self):
+        """Create articles that should be rejected during normalization."""
+        return [
+            # Too short content
+            Article(
+                title="Short",
+                url=HttpUrl("https://example.com/short"),
+                content="Too short",
+                fetch_timestamp=datetime.now(UTC),
+            ),
+            # Missing critical fields
+            Article(
+                title="",
+                url=HttpUrl("https://example.com/notitle"),
+                content="Content without title. " * 10,
+                fetch_timestamp=datetime.now(UTC),
+            ),
+        ]
+
+    @pytest.fixture(autouse=True)
+    def setup_activity_environment(self, redis_client, clear_async_db_cache):
+        """Setup environment for Temporal activity tests."""
+        with patch("app.temporal.activities.processing.get_redis_client", return_value=redis_client):
+            yield
+
+    @pytest.mark.asyncio
+    async def test_normalize_articles_batch_happy_path(self, activities, sample_raw_articles):
+        """Test successful batch normalization with all valid articles."""
+        # Mock AI provider for spam detection
+        with patch("app.temporal.activities.processing.create_ai_provider") as mock_ai_factory:
+            mock_provider = MagicMock()
+
+            def create_agent_mock(output_type, system_prompt):
+                test_model = TestModel(
+                    custom_output_args=SpamDetectionResult(
+                        is_spam=False,
+                        confidence=0.95,
+                        reasoning="Legitimate content",
+                    )
+                )
+                return Agent(test_model, output_type=output_type, system_prompt=system_prompt)
+
+            mock_provider.create_agent = create_agent_mock
+            mock_ai_factory.return_value = mock_provider
+            activities.ai_provider = mock_provider
+
+            request = sc.BatchNormalizationRequest(articles=sample_raw_articles)
+            result = await activities.normalize_articles_batch(request)
+
+            # Verify result structure
+            assert len(result.articles) == 2
+            assert result.total_processed == 2
+            assert result.rejected_count == 0
+            assert result.spam_detected_count == 0
+            assert result.start_timestamp <= result.end_timestamp
+
+            # Verify normalization applied (whitespace trimmed)
+            assert result.articles[0].title == "Valid Article Title"
+            assert result.articles[0].author == "Author Name"
+            # Tags should be normalized (trimmed, empties removed)
+            assert "" not in result.articles[0].tags
+            assert "AI" in result.articles[0].tags or "  AI  " not in result.articles[0].tags
+
+    @pytest.mark.asyncio
+    async def test_normalize_articles_batch_idempotency(self, activities, sample_raw_articles):
+        """Test that activity produces consistent results on repeated calls."""
+        # Mock AI provider
+        with patch("app.temporal.activities.processing.create_ai_provider") as mock_ai_factory:
+            mock_provider = MagicMock()
+
+            def create_agent_mock(output_type, system_prompt):
+                test_model = TestModel(
+                    custom_output_args=SpamDetectionResult(
+                        is_spam=False,
+                        confidence=0.95,
+                        reasoning="Not spam",
+                    )
+                )
+                return Agent(test_model, output_type=output_type, system_prompt=system_prompt)
+
+            mock_provider.create_agent = create_agent_mock
+            mock_ai_factory.return_value = mock_provider
+            activities.ai_provider = mock_provider
+
+            request = sc.BatchNormalizationRequest(articles=sample_raw_articles)
+
+            # First call
+            result1 = await activities.normalize_articles_batch(request)
+            assert len(result1.articles) == 2
+
+            # Second call - should produce same results (idempotent)
+            result2 = await activities.normalize_articles_batch(request)
+            assert len(result2.articles) == 2
+
+            # Verify article URLs match
+            urls1 = {str(a.url) for a in result1.articles}
+            urls2 = {str(a.url) for a in result2.articles}
+            assert urls1 == urls2
+
+    @pytest.mark.asyncio
+    async def test_normalize_articles_batch_spam_detection(self, activities, sample_raw_articles):
+        """Test spam detection integration (verifies spam detection runs without errors)."""
+        # Mock AI provider for spam detection
+        with patch("app.temporal.activities.processing.create_ai_provider") as mock_ai_factory:
+            mock_provider = MagicMock()
+
+            def create_agent_mock(output_type, system_prompt):
+                test_model = TestModel(
+                    custom_output_args=SpamDetectionResult(
+                        is_spam=False,
+                        confidence=0.95,
+                        reasoning="Legitimate content",
+                    )
+                )
+                return Agent(test_model, output_type=output_type, system_prompt=system_prompt)
+
+            mock_provider.create_agent = create_agent_mock
+            mock_ai_factory.return_value = mock_provider
+            activities.ai_provider = mock_provider
+
+            request = sc.BatchNormalizationRequest(articles=sample_raw_articles)
+            result = await activities.normalize_articles_batch(request)
+
+            # Verify spam detection ran successfully (no crashes)
+            assert result.total_processed == 2
+            assert len(result.articles) == 2
+            assert result.spam_detected_count == 0  # No spam detected (all passed)
+
+    @pytest.mark.asyncio
+    async def test_normalize_articles_batch_ai_failure_graceful(self, activities, sample_raw_articles):
+        """Test graceful handling when AI spam detection fails."""
+        # Mock AI provider to raise exception
+        with patch("app.temporal.activities.processing.create_ai_provider") as mock_ai_factory:
+            mock_provider = MagicMock()
+
+            def create_agent_mock(output_type, system_prompt):
+                agent = MagicMock()
+                agent.run = AsyncMock(side_effect=Exception("AI service down"))
+                agent.override = MagicMock()
+                return agent
+
+            mock_provider.create_agent = create_agent_mock
+            mock_ai_factory.return_value = mock_provider
+            activities.ai_provider = mock_provider
+
+            request = sc.BatchNormalizationRequest(articles=sample_raw_articles)
+            result = await activities.normalize_articles_batch(request)
+
+            # Should still normalize articles (assume not spam on AI failure)
+            assert len(result.articles) == 2
+            assert result.total_processed == 2
+            # AI failures don't count as spam or errors (graceful fallback)
+            assert result.spam_detected_count == 0
+
+    @pytest.mark.asyncio
+    async def test_normalize_articles_batch_no_filtering(self, activities, sample_raw_articles, invalid_articles):
+        """Test that normalization passes through all articles without filtering.
+
+        Note: Filtering (based on length/spam) is now done by validate_and_filter_batch.
+        normalize_articles_batch only normalizes: URLs, dates, metadata.
+        """
+        articles = sample_raw_articles + invalid_articles
+
+        # Mock AI provider (though it's not used in normalization anymore)
+        with patch("app.temporal.activities.processing.create_ai_provider") as mock_ai_factory:
+            mock_provider = MagicMock()
+
+            def create_agent_mock(output_type, system_prompt):
+                test_model = TestModel(
+                    custom_output_args=SpamDetectionResult(
+                        is_spam=False,
+                        confidence=0.9,
+                        reasoning="Not spam",
+                    )
+                )
+                return Agent(test_model, output_type=output_type, system_prompt=system_prompt)
+
+            mock_provider.create_agent = create_agent_mock
+            mock_ai_factory.return_value = mock_provider
+            activities.ai_provider = mock_provider
+
+            request = sc.BatchNormalizationRequest(articles=articles)
+            result = await activities.normalize_articles_batch(request)
+
+            # All articles pass through (no filtering in normalize anymore)
+            assert result.total_processed == 4
+            assert len(result.articles) == 4  # All articles normalized, even short/invalid ones
+            assert result.rejected_count == 0  # No rejection happens here
+            assert result.spam_detected_count == 0  # No spam detection in normalization
+
+    @pytest.mark.asyncio
+    async def test_normalize_articles_batch_empty_input(self, activities):
+        """Test handling of empty article list."""
+        request = sc.BatchNormalizationRequest(articles=[])
+        result = await activities.normalize_articles_batch(request)
+
+        assert result.total_processed == 0
+        assert len(result.articles) == 0
+        assert result.rejected_count == 0
+        assert result.spam_detected_count == 0

@@ -66,6 +66,7 @@ class TopicExtractionSettings(BaseModel):
     """Topic extraction configuration."""
 
     max_topics: int = 5
+    cache_ttl_minutes: int = 1440  # 24 hours
 
 
 class SummarizationSettings(BaseModel):
@@ -97,11 +98,13 @@ class ContentNormalizationSettings(BaseModel):
     min_length: int = 100
     max_length: int = 50000
     spam_detection_enabled: bool = True
+    spam_detection_cache_ttl_minutes: int = 1440  # 24 hours
     title_max_length: int = 500
     author_max_length: int = 100
     tag_max_length: int = 50
     max_tags_per_article: int = 20
     quality_scoring_enabled: bool = True
+    quality_cache_ttl_minutes: int = 720  # 12 hours
 
 
 class PersonalizationSettings(BaseModel):

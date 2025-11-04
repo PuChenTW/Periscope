@@ -16,7 +16,7 @@ from loguru import logger
 from temporalio.worker import Worker
 
 from app.config import get_settings
-from app.temporal.activities.processing import score_relevance_batch
+from app.temporal.activities.processing import ProcessingActivities
 from app.temporal.client import get_temporal_client
 from app.temporal.workflows import DailyDigestWorkflow
 
@@ -35,11 +35,20 @@ async def create_worker() -> Worker:
     client = await get_temporal_client()
 
     try:
+        # Create single instance of activities class
+        processing_activities = ProcessingActivities()
+
         worker = Worker(
             client,
             task_queue=settings.temporal.task_queue,
             workflows=[DailyDigestWorkflow],
-            activities=[score_relevance_batch],
+            activities=[
+                processing_activities.validate_and_filter_batch,
+                processing_activities.normalize_articles_batch,
+                processing_activities.score_quality_batch,
+                processing_activities.extract_topics_batch,
+                processing_activities.score_relevance_batch,
+            ],
         )
 
         logger.info(f"Worker configured for task queue: {settings.temporal.task_queue}")

@@ -13,8 +13,8 @@ from temporalio import workflow
 from app.processors.fetchers.base import Article
 
 with workflow.unsafe.imports_passed_through():
+    import app.temporal.activities.schemas as sc
     from app.temporal import shared
-    from app.temporal.activities.processing import BatchRelevanceRequest, score_relevance_batch
 
 
 class DigestWorkflowInput(BaseModel):
@@ -70,15 +70,16 @@ class DailyDigestWorkflow:
 
     Workflow phases:
     1. Fetch content from all sources (parallel)
-    2. Normalize articles (validation, URL normalization, metadata cleanup)
-    3. Score content quality (optional AI-powered quality assessment)
-    4. Extract topics (AI-powered topic extraction)
-    5. Score relevance to user interests
-    6. Summarize articles (AI-powered summarization)
-    7. Detect similar articles and group them
-    8. Assemble personalized digest email
-    9. Send email with retry logic
-    10. Record delivery status
+    2. Validate and filter articles (basic validation, AI spam detection)
+    3. Normalize articles (URL normalization, metadata cleanup)
+    4. Score content quality (optional AI-powered quality assessment)
+    5. Extract topics (AI-powered topic extraction)
+    6. Score relevance to user interests
+    7. Summarize articles (AI-powered summarization)
+    8. Detect similar articles and group them
+    9. Assemble personalized digest email
+    10. Send email with retry logic
+    11. Record delivery status
 
     Each phase uses Temporal activities with appropriate timeout/retry policies.
     """
@@ -101,60 +102,88 @@ class DailyDigestWorkflow:
         error_messages: list[str] = []
 
         # TODO: Phase 1 - Fetch content from sources (parallel)
-        # Activity: fetch_sources_parallel
+        # Activity: fetch_sources_parallel (not yet implemented)
         # Input: input.source_urls
         # Output: list[Article] (raw articles from all sources)
-        # Timeout: MEDIUM_TIMEOUT (30s per source, parallel execution)
-        # Retry: MEDIUM_RETRY_POLICY (3 attempts, 5s-45s backoff)
-        # Error handling: Collect failures, continue with successful fetches
-        # Observability: Track fetch count per source, errors per source
+        # For now, use empty list until fetching is implemented
         raw_articles: list[Article] = []
         articles_fetched = len(raw_articles)
 
-        # TODO: Phase 2 - Normalize articles
-        # Activity: normalize_articles
-        # Input: raw_articles
-        # Output: list[Article] (filtered + normalized metadata/content)
-        # Timeout: FAST_TIMEOUT (5s, lightweight validation)
-        # Retry: FAST_RETRY_POLICY (3 attempts, 2s-10s backoff)
-        # Error handling: Log failures, continue with valid articles
-        # Observability: Track rejected count, spam detected count
-        normalized_articles: list[Article] = []
+        # Phase 2: Validate and filter articles
+        validation_result = await workflow.execute_activity(
+            "validate_and_filter_batch",
+            sc.BatchValidationRequest(articles=raw_articles),
+            start_to_close_timeout=timedelta(seconds=shared.MEDIUM_TIMEOUT),
+            retry_policy=shared.MEDIUM_RETRY_POLICY,
+        )
+        validation_result = sc.BatchValidationResult.model_validate(validation_result)
+        total_ai_calls += validation_result.ai_calls
+        total_errors += validation_result.errors_count
+        validated_articles = validation_result.articles
 
-        # TODO: Phase 3 - Score content quality
-        # Activity: score_quality_batch
-        # Input: normalized_articles
-        # Output: list[Article] (with quality_score metadata)
-        # Timeout: LONG_TIMEOUT (120s, AI calls for metadata scoring)
-        # Retry: LONG_RETRY_POLICY (2 attempts, 15s-120s backoff)
-        # Error handling: Default quality score on failure, continue processing
-        # Observability: Track AI calls, cache hits, quality distribution
-        # quality_scored_articles: list[Article] = []
+        # Phase 3: Normalize articles
+        norm_result = await workflow.execute_activity(
+            "normalize_articles_batch",
+            sc.BatchNormalizationRequest(articles=validated_articles),
+            start_to_close_timeout=timedelta(seconds=shared.MEDIUM_TIMEOUT),
+            retry_policy=shared.MEDIUM_RETRY_POLICY,
+        )
+        norm_result = sc.BatchNormalizationResult.model_validate(norm_result)
+        total_ai_calls += norm_result.ai_calls
+        total_errors += norm_result.errors_count
+        normalized_articles = norm_result.articles
 
-        # TODO: Phase 4 - Extract topics
-        # Activity: extract_topics_batch
-        # Input: quality_scored_articles
-        # Output: list[Article] (with ai_topics metadata)
-        # Timeout: LONG_TIMEOUT (120s, AI calls for topic extraction)
-        # Retry: LONG_RETRY_POLICY (2 attempts, 15s-120s backoff)
-        # Error handling: Empty topics list on failure, continue processing
-        # Observability: Track AI calls, cache hits, topic diversity
-        # topic_extracted_articles: list[Article] = []
+        # Phase 4: Score content quality
+        quality_result = await workflow.execute_activity(
+            "score_quality_batch",
+            sc.BatchQualityRequest(articles=normalized_articles),
+            start_to_close_timeout=timedelta(seconds=shared.LONG_TIMEOUT),
+            retry_policy=shared.LONG_RETRY_POLICY,
+        )
+        quality_result = sc.BatchQualityResult.model_validate(quality_result)
+        total_ai_calls += quality_result.ai_calls
+        total_errors += quality_result.errors_count
+        quality_scored_articles = quality_result.articles
 
-        # TODO: Phase 5 - Score relevance to user interests
-        # Activity: score_relevance_batch (already exists as stub)
-        # Input: topic_extracted_articles, input.interest_keywords, quality_scores
-        # Output: BatchRelevanceResult (articles + relevance scores + metrics)
-        # Timeout: MEDIUM_TIMEOUT (30s, AI semantic scoring)
-        # Retry: MEDIUM_RETRY_POLICY (3 attempts, 5s-45s backoff)
-        # Error handling: Use keyword-only scoring on AI failure
-        # Observability: Track AI calls, cache hits, threshold pass rate
-        relevant_articles: list[Article] = []
-        articles_relevant = len(relevant_articles)
+        # Phase 5: Extract topics
+        topics_result = await workflow.execute_activity(
+            "extract_topics_batch",
+            sc.BatchTopicExtractionRequest(articles=quality_scored_articles),
+            start_to_close_timeout=timedelta(seconds=shared.LONG_TIMEOUT),
+            retry_policy=shared.LONG_RETRY_POLICY,
+        )
+        topics_result = sc.BatchTopicExtractionResult.model_validate(topics_result)
+        total_ai_calls += topics_result.ai_calls
+        total_errors += topics_result.errors_count
+        topic_extracted_articles = topics_result.articles
 
-        # TODO: Phase 6 - Summarize articles
+        # Phase 6: Score relevance to user interests
+        # TODO: Get profile_id from digest input once user system is integrated
+        # For now, skip relevance scoring if no raw articles
+        articles_relevant = 0
+
+        if topic_extracted_articles:
+            relevance_result = await workflow.execute_activity(
+                "score_relevance_batch",
+                sc.BatchRelevanceRequest(
+                    profile_id="placeholder_profile_id",  # TODO: Get from digest.profile_id
+                    articles=topic_extracted_articles,
+                    quality_scores={
+                        str(url): result.quality_score for url, result in quality_result.quality_results.items()
+                    },
+                ),
+                start_to_close_timeout=timedelta(seconds=shared.MEDIUM_TIMEOUT),
+                retry_policy=shared.MEDIUM_RETRY_POLICY,
+            )
+            relevance_result = sc.BatchRelevanceResult.model_validate(relevance_result)
+            total_ai_calls += relevance_result.ai_calls
+            total_errors += relevance_result.errors_count
+            articles_relevant = relevance_result.total_scored
+            # TODO: Phase 7 will use relevance_result.articles for summarization
+
+        # TODO: Phase 7 - Summarize articles
         # Activity: summarize_articles_batch
-        # Input: relevant_articles
+        # Input: relevance_result.articles
         # Output: list[Article] (with summary metadata)
         # Timeout: LONG_TIMEOUT (120s, AI summarization)
         # Retry: LONG_RETRY_POLICY (2 attempts, 15s-120s backoff)
@@ -162,7 +191,7 @@ class DailyDigestWorkflow:
         # Observability: Track AI calls, cache hits, summary length distribution
         # summarized_articles: list[Article] = []
 
-        # TODO: Phase 7 - Detect similar articles
+        # TODO: Phase 8 - Detect similar articles
         # Activity: detect_similar_articles
         # Input: summarized_articles
         # Output: list[ArticleGroup] (grouped by similarity)
@@ -172,7 +201,7 @@ class DailyDigestWorkflow:
         # Observability: Track AI calls, group count, articles per group
         # article_groups: list = []  # type: list[ArticleGroup] when implemented
 
-        # TODO: Phase 8 - Assemble digest
+        # TODO: Phase 9 - Assemble digest
         # Activity: assemble_digest
         # Input: article_groups, input.user_id
         # Output: DigestPayload (HTML email body + metadata)
@@ -182,7 +211,7 @@ class DailyDigestWorkflow:
         # Observability: Track template render time, email size
         # digest_payload = None  # type: DigestPayload when implemented
 
-        # TODO: Phase 9 - Send email
+        # TODO: Phase 10 - Send email
         # Activity: send_email
         # Input: digest_payload, input.user_id
         # Output: bool (sent successfully)
@@ -192,7 +221,7 @@ class DailyDigestWorkflow:
         # Observability: Track delivery time, SMTP response codes
         digest_sent = False
 
-        # TODO: Phase 10 - Record delivery status
+        # TODO: Phase 11 - Record delivery status
         # Activity: record_delivery_status
         # Input: input.user_id, digest_sent, error_messages
         # Output: None
@@ -204,17 +233,6 @@ class DailyDigestWorkflow:
         # Calculate final metrics
         end_timestamp = workflow.now()
         articles_processed = len(normalized_articles)
-
-        await workflow.execute_activity(
-            score_relevance_batch,
-            BatchRelevanceRequest(
-                profile_id="test_profile",
-                articles=[],
-                quality_scores=None,
-            ),
-            start_to_close_timeout=timedelta(seconds=5),
-            retry_policy=shared.FAST_RETRY_POLICY,
-        )
 
         return DigestWorkflowResult(
             user_id=digest.user_id,
