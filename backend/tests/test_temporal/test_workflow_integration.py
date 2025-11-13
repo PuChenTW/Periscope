@@ -25,6 +25,8 @@ async def validate_and_filter_batch_mock(request: sc.BatchValidationRequest) -> 
         total_processed=len(request.articles),
         valid_count=len(request.articles),
         invalid_count=0,
+        start_timestamp=datetime.now(UTC),
+        end_timestamp=datetime.now(UTC),
         ai_calls=0,
         errors_count=0,
     )
@@ -87,6 +89,39 @@ async def score_relevance_batch_mock(request: sc.BatchRelevanceRequest) -> sc.Ba
     )
 
 
+@activity.defn(name="fetch_user_config")
+async def fetch_user_config_mock(request: sc.FetchUserConfigRequest) -> sc.FetchUserConfigResult:
+    return sc.FetchUserConfigResult(
+        user_config=sc.DigestUserConfig(
+            user_id=request.user_id,
+            email="test@example.com",
+            timezone="UTC",
+            delivery_time=datetime.now(UTC).time(),
+            summary_style="brief",
+            is_active=True,
+            sources=[
+                sc.ContentSourceConfig(
+                    id="source_1",
+                    source_type="rss",
+                    source_url="https://example.com/feed.xml",
+                    source_name="Example Feed",
+                    is_active=True,
+                )
+            ],
+            interest_profile=sc.InterestProfileConfig(
+                id="profile_1",
+                keywords=["technology", "AI"],
+                relevance_threshold=50,
+                boost_factor=1.0,
+            ),
+        ),
+        sources_count=1,
+        keywords_count=2,
+        start_timestamp=datetime.now(UTC),
+        end_timestamp=datetime.now(UTC),
+    )
+
+
 @pytest.mark.asyncio
 @pytest.mark.timeout(20)
 async def test_workflow_can_be_started():
@@ -111,6 +146,7 @@ async def test_workflow_can_be_started():
             task_queue="tq1",
             workflows=[DailyDigestWorkflow],
             activities=[
+                fetch_user_config_mock,
                 validate_and_filter_batch_mock,
                 normalize_articles_batch_mock,
                 score_quality_batch_mock,

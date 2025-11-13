@@ -20,6 +20,7 @@ from app.processors.relevance_scorer import RelevanceBreakdown, RelevanceResult,
 from app.processors.validator import SpamDetectionResult
 from app.temporal.activities import schemas as sc
 from app.temporal.activities.processing import ProcessingActivities
+from app.utils.cache import compute_relevance_cache_key
 
 
 class TestComputeRelevanceCacheKey:
@@ -30,7 +31,7 @@ class TestComputeRelevanceCacheKey:
         """Create ProcessingActivities instance for testing."""
         return ProcessingActivities()
 
-    def test_cache_key_format(self, activities):
+    def test_cache_key_format(self):
         """Test cache key has correct format."""
         article = Article(
             title="Test Article",
@@ -39,17 +40,17 @@ class TestComputeRelevanceCacheKey:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        cache_key = activities._compute_relevance_cache_key(
-            article,
-            profile_keywords=["python", "ai"],
-            relevance_threshold=40,
+        cache_key = compute_relevance_cache_key(
+            url=article.url,
+            keywords=["python", "ai"],
+            threshold=40,
             boost_factor=1.0,
         )
 
         assert cache_key.startswith("relevance:")
         assert str(article.url) in cache_key
 
-    def test_cache_key_same_profile_content(self, activities):
+    def test_cache_key_same_profile_content(self):
         """Test identical profile content produces same cache key."""
         article = Article(
             title="Test",
@@ -58,12 +59,12 @@ class TestComputeRelevanceCacheKey:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        key1 = activities._compute_relevance_cache_key(article, ["python", "ai"], 40, 1.0)
-        key2 = activities._compute_relevance_cache_key(article, ["python", "ai"], 40, 1.0)
+        key1 = compute_relevance_cache_key(article.url, ["python", "ai"], 40, 1.0)
+        key2 = compute_relevance_cache_key(article.url, ["python", "ai"], 40, 1.0)
 
         assert key1 == key2
 
-    def test_cache_key_different_keywords(self, activities):
+    def test_cache_key_different_keywords(self):
         """Test different keywords produce different cache keys."""
         article = Article(
             title="Test",
@@ -72,8 +73,8 @@ class TestComputeRelevanceCacheKey:
             fetch_timestamp=datetime.now(UTC),
         )
 
-        key1 = activities._compute_relevance_cache_key(article, ["python"], 40, 1.0)
-        key2 = activities._compute_relevance_cache_key(article, ["java"], 40, 1.0)
+        key1 = compute_relevance_cache_key(article.url, ["python"], 40, 1.0)
+        key2 = compute_relevance_cache_key(article.url, ["java"], 40, 1.0)
 
         assert key1 != key2
 
@@ -406,8 +407,8 @@ class TestScoreRelevanceBatch:
             assert result1.total_scored == 1
 
             # Verify result was cached
-            cache_key = activities._compute_relevance_cache_key(
-                sample_articles[0],
+            cache_key = compute_relevance_cache_key(
+                sample_articles[0].url,
                 sample_profile.keywords,
                 sample_profile.relevance_threshold,
                 sample_profile.boost_factor,
