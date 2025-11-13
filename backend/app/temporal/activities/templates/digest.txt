@@ -1,0 +1,27 @@
+DAILY READING DIGEST
+{{ date }}
+
+{% for group in article_groups %}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{{ group.primary_article.title }}
+Source: {{ group.primary_article.source_name or 'Unknown' }}
+Date: {{ group.primary_article.published_at.strftime('%Y-%m-%d %H:%M') if group.primary_article.published_at else 'Unknown' }}
+Link: {{ group.primary_article.url }}
+
+{% if group.primary_article.summary %}
+{{ group.primary_article.summary }}
+{% endif %}
+
+{% if group.similar_articles %}
+Related Articles ({{ group.similar_articles|length }}):
+{% for article in group.similar_articles %}
+  • {{ article.title }}
+    Source: {{ article.source_name or 'Unknown' }}
+    Link: {{ article.url }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Generated at {{ generated_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC
