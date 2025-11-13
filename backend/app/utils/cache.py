@@ -1,3 +1,4 @@
+import hashlib
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -179,3 +180,111 @@ async def get_cache() -> CacheProtocol:
         logger.warning(f"Failed to create Redis cache: {e}. Falling back to MemoryCache.")
         settings = get_settings()
         return MemoryCache(default_ttl=settings.cache.ttl_minutes * 60)
+
+
+# ============================================================================
+# Cache Key Generation Utilities
+# ============================================================================
+
+
+def compute_validation_cache_key(title: str, content: str | None) -> str:
+    """
+    Compute cache key for validation based on content hash.
+
+    Args:
+        title: Article title
+        content: Article content (first 1000 chars used for hash)
+
+    Returns:
+        Cache key in format "validation:{content_hash}"
+    """
+    content_str = f"{title}:{content[:1000] if content else ''}"
+    content_hash = hashlib.sha256(content_str.encode()).hexdigest()[:16]
+    return f"validation:{content_hash}"
+
+
+def compute_quality_cache_key(url: str) -> str:
+    """
+    Compute cache key for quality scoring based on URL hash.
+
+    Args:
+        url: Article URL
+
+    Returns:
+        Cache key in format "quality:{url_hash}"
+    """
+    url_hash = hashlib.sha256(str(url).encode()).hexdigest()[:16]
+    return f"quality:{url_hash}"
+
+
+def compute_topics_cache_key(url: str) -> str:
+    """
+    Compute cache key for topic extraction based on URL hash.
+
+    Args:
+        url: Article URL
+
+    Returns:
+        Cache key in format "topics:{url_hash}"
+    """
+    url_hash = hashlib.sha256(str(url).encode()).hexdigest()[:16]
+    return f"topics:{url_hash}"
+
+
+def compute_relevance_cache_key(url: str, keywords: list[str], threshold: int, boost_factor: float) -> str:
+    """
+    Compute cache key for relevance scoring based on profile content hash.
+
+    Uses SHA256 hash of profile content (keywords, threshold, boost_factor)
+    combined with article URL. This enables cache sharing across users with
+    identical interest profiles.
+
+    Args:
+        url: Article URL
+        keywords: List of interest keywords from profile
+        threshold: Relevance threshold from profile
+        boost_factor: Boost factor from profile
+
+    Returns:
+        Cache key in format "relevance:{profile_hash}:{url}"
+    """
+    profile_content = f"{sorted(keywords)}:{threshold}:{boost_factor}"
+    profile_hash = hashlib.sha256(profile_content.encode()).hexdigest()[:16]
+    return f"relevance:{profile_hash}:{url}"
+
+
+def compute_summary_cache_key(url: str, style: str) -> str:
+    """
+    Compute cache key for summarization based on URL and style.
+
+    Args:
+        url: Article URL
+        style: Summary style (brief, detailed, bullet_points, etc.)
+
+    Returns:
+        Cache key in format "summary:{url_hash}:{style}"
+    """
+    url_hash = hashlib.sha256(str(url).encode()).hexdigest()[:16]
+    return f"summary:{url_hash}:{style}"
+
+
+def compute_similarity_cache_key(url1: str, url2: str) -> str:
+    """
+    Compute cache key for pairwise similarity comparison.
+
+    Uses sorted URL hashes to ensure consistent cache key regardless of
+    comparison order.
+
+    Args:
+        url1: First article URL
+        url2: Second article URL
+
+    Returns:
+        Cache key in format "similarity:{hash1}:{hash2}" (hashes sorted)
+    """
+    url1_hash = hashlib.sha256(str(url1).encode()).hexdigest()[:16]
+    url2_hash = hashlib.sha256(str(url2).encode()).hexdigest()[:16]
+    # Use sorted hashes to ensure consistent key regardless of order
+    if url1_hash < url2_hash:
+        return f"similarity:{url1_hash}:{url2_hash}"
+    return f"similarity:{url2_hash}:{url1_hash}"

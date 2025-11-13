@@ -6,7 +6,6 @@ orchestrated execution within workflows. Activities are idempotent and
 support retry logic defined in shared.py.
 """
 
-import hashlib
 from datetime import UTC, datetime
 
 from loguru import logger
@@ -15,15 +14,25 @@ from temporalio import activity
 import app.temporal.activities.schemas as sc
 from app.config import get_settings
 from app.database import get_async_sessionmaker
-from app.exceptions import ValidationError
+from app.exceptions import ExternalServiceError, ValidationError
 from app.processors.ai_provider import create_ai_provider
 from app.processors.fetchers.base import Article
 from app.processors.normalizer import ContentNormalizer
 from app.processors.quality_scorer import ContentQualityResult, QualityScorer
 from app.processors.relevance_scorer import RelevanceResult, RelevanceScorer
+from app.processors.similarity_detector import SimilarityDetector
+from app.processors.summarizer import Summarizer
 from app.processors.topic_extractor import TopicExtractor
 from app.processors.validator import ContentValidator, ValidationResult
 from app.repositories import ProfileRepository
+from app.utils.cache import (
+    compute_quality_cache_key,
+    compute_relevance_cache_key,
+    compute_similarity_cache_key,
+    compute_summary_cache_key,
+    compute_topics_cache_key,
+    compute_validation_cache_key,
+)
 from app.utils.redis_client import get_redis_client
 
 
@@ -86,7 +95,7 @@ class ProcessingActivities:
             try:
                 # Check cache for validation result
                 result = None
-                cache_key = self._compute_validation_cache_key(article)
+                cache_key = compute_validation_cache_key(article.title, article.content)
                 cached_result = await self.redis_client.get(cache_key)
 
                 if cached_result:
@@ -140,12 +149,6 @@ class ProcessingActivities:
             ai_calls=ai_calls,
             errors_count=errors_count,
         )
-
-    def _compute_validation_cache_key(self, article: Article) -> str:
-        """Compute cache key for validation based on content hash."""
-        content = f"{article.title}:{article.content[:1000] if article.content else ''}"
-        content_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
-        return f"validation:{content_hash}"
 
     # ========================================================================
     # Activity 2: Normalize Articles
@@ -251,7 +254,7 @@ class ProcessingActivities:
         for article in request.articles:
             try:
                 # Compute cache key based on URL hash
-                cache_key = self._compute_quality_cache_key(article)
+                cache_key = compute_quality_cache_key(article.url)
 
                 # Check cache for idempotency
                 cached_result = await self.redis_client.get(cache_key)
@@ -294,11 +297,6 @@ class ProcessingActivities:
             ai_calls=ai_calls,
             errors_count=errors_count,
         )
-
-    def _compute_quality_cache_key(self, article: Article) -> str:
-        """Compute cache key for quality scoring based on URL hash."""
-        url_hash = hashlib.sha256(str(article.url).encode()).hexdigest()[:16]
-        return f"quality:{url_hash}"
 
     # ========================================================================
     # Activity 4: Extract Topics
@@ -347,7 +345,7 @@ class ProcessingActivities:
         for article in request.articles:
             try:
                 # Compute cache key based on URL hash
-                cache_key = self._compute_topics_cache_key(article)
+                cache_key = compute_topics_cache_key(article.url)
 
                 # Check cache for idempotency
                 cached_topics = await self.redis_client.get(cache_key)
@@ -397,11 +395,6 @@ class ProcessingActivities:
             ai_calls=ai_calls,
             errors_count=errors_count,
         )
-
-    def _compute_topics_cache_key(self, article: Article) -> str:
-        """Compute cache key for topic extraction based on URL hash."""
-        url_hash = hashlib.sha256(str(article.url).encode()).hexdigest()[:16]
-        return f"topics:{url_hash}"
 
     # ========================================================================
     # Activity 5: Score Relevance
@@ -463,8 +456,8 @@ class ProcessingActivities:
         for article in request.articles:
             try:
                 # Compute cache key based on profile content hash
-                cache_key = self._compute_relevance_cache_key(
-                    article,
+                cache_key = compute_relevance_cache_key(
+                    article.url,
                     profile.keywords,
                     profile.relevance_threshold,
                     profile.boost_factor,
@@ -515,25 +508,221 @@ class ProcessingActivities:
             errors_count=errors_count,
         )
 
-    def _compute_relevance_cache_key(
-        self, article: Article, profile_keywords: list[str], relevance_threshold: int, boost_factor: float
-    ) -> str:
+    @activity.defn(name="summarize_articles_batch")
+    async def summarize_articles_batch(self, request: sc.BatchSummarizationRequest) -> sc.BatchSummarizationResult:
         """
-        Compute cache key for relevance scoring based on profile content hash.
+        Summarize a batch of articles using AI.
 
-        Uses SHA256 hash of profile content (keywords, threshold, boost_factor)
-        combined with article URL. This enables cache sharing across users with
-        identical interest profiles.
+        This activity uses the Summarizer processor to generate concise summaries
+        with support for multiple styles (brief, detailed, bullet_points). Results
+        are cached by URL and summary style to avoid redundant AI calls.
+
+        Idempotency Contract:
+        - Cache key: f"summary:{url_hash}:{style}"
+        - Cache TTL: summarization.cache_ttl_minutes
+        - Behavior: Cached summaries are returned immediately
 
         Args:
-            article: Article to score
-            profile_keywords: List of interest keywords from profile
-            relevance_threshold: Relevance threshold from profile
-            boost_factor: Boost factor from profile
+            request: BatchSummarizationRequest with articles and summary style
 
         Returns:
-            Cache key string in format "relevance:{profile_hash}:{article_url}"
+            BatchSummarizationResult with summaries and articles
+
+        Raises:
+            ExternalServiceError: If AI provider fails (retryable)
         """
-        profile_content = f"{sorted(profile_keywords)}:{relevance_threshold}:{boost_factor}"
-        profile_hash = hashlib.sha256(profile_content.encode()).hexdigest()[:16]
-        return f"relevance:{profile_hash}:{article.url}"
+        start_timestamp = datetime.now(UTC)
+        logger.info(f"Summarizing {len(request.articles)} articles (style={request.summary_style})")
+
+        # Initialize Summarizer
+        summarizer = Summarizer(
+            summarization_settings=self.settings.summarization,
+            custom_prompt_settings=self.settings.custom_prompt,
+            ai_validation_settings=self.settings.ai_validation,
+            ai_provider=self.ai_provider,
+            summary_style=request.summary_style,
+            custom_prompt=request.custom_prompt,
+        )
+
+        # Track metrics
+        summary_results: dict[str, sc.SummaryResult] = {}
+        cache_hits = 0
+        ai_calls = 0
+        errors_count = 0
+        articles_with_summary = 0
+
+        # Summarize each article with caching
+        for article in request.articles:
+            try:
+                # Compute cache key
+                cache_key = compute_summary_cache_key(article.url, request.summary_style)
+
+                # Check cache for idempotency
+                cached_result = await self.redis_client.get(cache_key)
+                if cached_result:
+                    result = sc.SummaryResult.model_validate_json(cached_result)
+                    summary_results[str(article.url)] = result
+                    cache_hits += 1
+                    if result.summary:
+                        articles_with_summary += 1
+                    logger.debug(f"Cache hit for summary: {article.url}")
+                    continue
+
+                # Cache miss: summarize article
+                result = await summarizer.summarize(article, topics=article.ai_topics or None)
+
+                # Count AI call if summary was generated (not fallback)
+                if "Error" not in result.reasoning and "insufficient" not in result.reasoning.lower():
+                    ai_calls += 1
+
+                # Cache result
+                cache_ttl_seconds = self.settings.summarization.cache_ttl_minutes * 60
+                await self.redis_client.setex(cache_key, cache_ttl_seconds, result.model_dump_json())
+
+                summary_results[str(article.url)] = result
+                if result.summary:
+                    articles_with_summary += 1
+
+                logger.debug(f"Summarized: {article.url} ({len(result.summary)} chars)")
+
+            except ExternalServiceError as e:
+                errors_count += 1
+                logger.error(f"AI service error summarizing article {article.url}: {e}")
+                # Create fallback summary result for retryable errors
+                fallback = sc.SummaryResult(
+                    summary=f"[Error summarizing article: {e!s}]",
+                    key_points=[],
+                    reasoning=f"Summarization error: {e!s}",
+                )
+                summary_results[str(article.url)] = fallback
+            except Exception as e:
+                # Unexpected error - log and re-raise to fail the activity
+                logger.error(f"Unexpected error summarizing article {article.url}: {e}")
+                raise
+
+        # Populate articles with summaries for next phase
+        summarized_articles = request.articles.copy()
+        for article in summarized_articles:
+            if str(article.url) in summary_results:
+                result = summary_results[str(article.url)]
+                article.summary = result.summary
+
+        end_timestamp = datetime.now(UTC)
+
+        return sc.BatchSummarizationResult(
+            articles=summarized_articles,
+            summary_results=summary_results,
+            total_summarized=len(summary_results),
+            cache_hits=cache_hits,
+            articles_with_summary=articles_with_summary,
+            start_timestamp=start_timestamp,
+            end_timestamp=end_timestamp,
+            ai_calls=ai_calls,
+            errors_count=errors_count,
+        )
+
+    @activity.defn(name="detect_similar_articles_batch")
+    async def detect_similar_articles_batch(self, request: sc.BatchSimilarityRequest) -> sc.BatchSimilarityResult:
+        """
+        Detect and group similar articles using AI.
+
+        This activity uses the SimilarityDetector processor to identify articles
+        that cover similar topics or events, even with different wording. Uses
+        pairwise AI comparison with caching to optimize performance.
+
+        Idempotency Contract:
+        - Cache key: f"similarity:{url1_hash}:{url2_hash}"
+        - Cache TTL: similarity.cache_ttl_minutes
+        - Behavior: Cached comparison results are reused
+
+        Args:
+            request: BatchSimilarityRequest with articles to group
+
+        Returns:
+            BatchSimilarityResult with ArticleGroups
+
+        Raises:
+            ExternalServiceError: If AI provider fails (retryable)
+        """
+        start_timestamp = datetime.now(UTC)
+        logger.info(f"Detecting similarities among {len(request.articles)} articles")
+
+        # Track metrics
+        ai_calls = 0
+        cache_hits = 0
+        errors_count = 0
+
+        # Build similarity graph with caching
+        articles = request.articles
+        similarity_graph: dict[int, list[int]] = {i: [] for i in range(len(articles))}
+
+        # Compare articles pairwise with caching
+        for i in range(len(articles)):
+            for j in range(i + 1, len(articles)):
+                try:
+                    # Compute cache key for pairwise comparison
+                    cache_key = compute_similarity_cache_key(articles[i].url, articles[j].url)
+
+                    # Check cache for idempotency
+                    cached_result = await self.redis_client.get(cache_key)
+                    if cached_result:
+                        is_similar = cached_result.decode() == "1"
+                        cache_hits += 1
+                        logger.debug(f"Cache hit for similarity comparison: {articles[i].url} vs {articles[j].url}")
+                    else:
+                        # Cache miss: use AI to compare
+                        detector = SimilarityDetector(
+                            settings=self.settings.similarity,
+                            ai_provider=self.ai_provider,
+                        )
+                        is_similar = await detector._compare_articles(articles[i], articles[j])
+                        ai_calls += 1
+
+                        # Cache result
+                        cache_ttl_seconds = self.settings.similarity.cache_ttl_minutes * 60
+                        cache_value = "1" if is_similar else "0"
+                        await self.redis_client.setex(cache_key, cache_ttl_seconds, cache_value)
+
+                    # Build similarity graph
+                    if is_similar:
+                        similarity_graph[i].append(j)
+                        similarity_graph[j].append(i)
+
+                except ExternalServiceError as e:
+                    errors_count += 1
+                    logger.error(f"AI service error comparing articles: {e}")
+                    # Skip this comparison, continue with others
+                    continue
+                except Exception as e:
+                    # Unexpected error - re-raise to fail the activity
+                    logger.error(f"Unexpected error during similarity detection: {e}")
+                    raise
+
+        # Create groups from similarity graph
+        detector = SimilarityDetector(
+            settings=self.settings.similarity,
+            ai_provider=self.ai_provider,
+        )
+        article_groups = detector._create_groups(articles, similarity_graph)
+
+        # Count articles that are grouped (not primary articles)
+        articles_grouped = sum(len(g.similar_articles) for g in article_groups)
+
+        end_timestamp = datetime.now(UTC)
+
+        logger.info(
+            f"Similarity detection complete: {len(article_groups)} groups, "
+            f"{ai_calls} AI calls, {cache_hits} cache hits, {errors_count} errors"
+        )
+
+        return sc.BatchSimilarityResult(
+            article_groups=article_groups,
+            total_articles=len(request.articles),
+            total_groups=len(article_groups),
+            articles_grouped=articles_grouped,
+            cache_hits=cache_hits,
+            start_timestamp=start_timestamp,
+            end_timestamp=end_timestamp,
+            ai_calls=ai_calls,
+            errors_count=errors_count,
+        )

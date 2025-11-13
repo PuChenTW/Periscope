@@ -16,6 +16,8 @@ from loguru import logger
 from temporalio.worker import Worker
 
 from app.config import get_settings
+from app.temporal.activities.assembly import AssemblyActivities
+from app.temporal.activities.content import ContentActivities
 from app.temporal.activities.processing import ProcessingActivities
 from app.temporal.client import get_temporal_client
 from app.temporal.workflows import DailyDigestWorkflow
@@ -35,7 +37,9 @@ async def create_worker() -> Worker:
     client = await get_temporal_client()
 
     try:
-        # Create single instance of activities class
+        # Create single instances of activities classes
+        assembly_activities = AssemblyActivities()
+        content_activities = ContentActivities()
         processing_activities = ProcessingActivities()
 
         worker = Worker(
@@ -43,11 +47,15 @@ async def create_worker() -> Worker:
             task_queue=settings.temporal.task_queue,
             workflows=[DailyDigestWorkflow],
             activities=[
+                content_activities.fetch_user_config,
                 processing_activities.validate_and_filter_batch,
                 processing_activities.normalize_articles_batch,
                 processing_activities.score_quality_batch,
                 processing_activities.extract_topics_batch,
                 processing_activities.score_relevance_batch,
+                processing_activities.summarize_articles_batch,
+                processing_activities.detect_similar_articles_batch,
+                assembly_activities.assemble_digest,
             ],
         )
 

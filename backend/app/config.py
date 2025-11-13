@@ -74,6 +74,7 @@ class SummarizationSettings(BaseModel):
 
     max_length: int = 500
     content_length: int = 2000
+    cache_ttl_minutes: int = 720  # 12 hours
 
 
 class CustomPromptSettings(BaseModel):
