@@ -42,13 +42,14 @@ class HTTPClient:
     async def close(self):
         if self._session and not self._session.closed:
             await self._session.close()
+            await asyncio.sleep(0.25)
             self._session = None
 
-    async def _make_request(self, url: str, headers: dict[str, str] | None = None):
-        """Make a single HTTP request."""
+    async def _make_request(self, url: str, headers: dict[str, str] | None = None, response_processor=None):
+        """Make a single HTTP request and process the response."""
         async with self._session.get(url, headers=headers) as response:
             response.raise_for_status()
-            return response
+            return await response_processor(response)
 
     async def _fetch_with_retry(self, url: str, headers: dict[str, str] | None = None, response_processor=None):
         """Fetch with retry logic."""
@@ -59,12 +60,10 @@ class HTTPClient:
 
         for attempt in range(self.max_retries):
             try:
-                response = await self._make_request(url, headers)
-                return await response_processor(response)
+                return await self._make_request(url, headers, response_processor)
 
             except (ClientResponseError, TimeoutError, ClientError) as e:
                 last_exception = e
-                # Handle rate limiting with proper delay
                 if isinstance(e, ClientResponseError) and e.status == HTTPStatus.TOO_MANY_REQUESTS:
                     retry_after = e.headers.get("Retry-After")
                     if retry_after:
@@ -74,12 +73,11 @@ class HTTPClient:
             except Exception as e:
                 last_exception = e
                 logger.error(f"Non-retryable error on attempt {attempt + 1} for {url}: {e}")
-                break  # Don't retry non-retryable errors
+                break
 
             if attempt < self.max_retries - 1:
                 await asyncio.sleep(self.retry_delay)
 
-        # Re-raise the original exception - no conversion needed
         if last_exception:
             raise last_exception
         raise Exception(f"Failed to fetch {url} after {self.max_retries} attempts")
