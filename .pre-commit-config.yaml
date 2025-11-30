@@ -20,6 +20,7 @@ repos:
       - id: ruff-check
         args: [--fix]
         files: ^backend/
+        exclude: ^backend/scripts/
       # Run the formatter
       - id: ruff-format
         files: ^backend/
