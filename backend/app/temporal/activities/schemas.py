@@ -72,6 +72,23 @@ class FetchUserConfigResult(BaseActivityResult):
     keywords_count: int = Field(description="Number of interest keywords")
 
 
+class FetchSourcesParallelRequest(BaseModel):
+    """Request for parallel content fetching from multiple sources."""
+
+    sources: list[ContentSourceConfig] = Field(description="Content sources to fetch from")
+
+
+class FetchSourcesParallelResult(BaseActivityResult):
+    """Result of parallel content fetching."""
+
+    articles: list[Article] = Field(description="All fetched articles from all sources")
+    total_sources: int = Field(description="Total sources attempted")
+    successful_sources: int = Field(description="Sources that returned content")
+    failed_sources: int = Field(description="Sources that failed to fetch")
+    total_articles: int = Field(description="Total articles fetched across all sources")
+    fetch_errors: dict[str, str] = Field(default_factory=dict, description="Error messages keyed by source_id")
+
+
 class BatchValidationRequest(BaseModel):
     """Request for batch article validation and filtering."""
 

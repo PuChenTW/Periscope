@@ -122,6 +122,25 @@ async def fetch_user_config_mock(request: sc.FetchUserConfigRequest) -> sc.Fetch
     )
 
 
+@activity.defn(name="fetch_sources_parallel")
+async def fetch_sources_parallel_mock(
+    request: sc.FetchSourcesParallelRequest,
+) -> sc.FetchSourcesParallelResult:
+    """Mock fetch_sources_parallel activity for workflow integration tests."""
+    # Return empty articles list for mock
+    # In real scenario, this would fetch from sources
+    return sc.FetchSourcesParallelResult(
+        articles=[],
+        total_sources=len(request.sources),
+        successful_sources=len([s for s in request.sources if s.is_active]),
+        failed_sources=0,
+        total_articles=0,
+        fetch_errors={},
+        start_timestamp=datetime.now(UTC),
+        end_timestamp=datetime.now(UTC),
+    )
+
+
 @pytest.mark.asyncio
 @pytest.mark.timeout(20)
 async def test_workflow_can_be_started():
@@ -147,6 +166,7 @@ async def test_workflow_can_be_started():
             workflows=[DailyDigestWorkflow],
             activities=[
                 fetch_user_config_mock,
+                fetch_sources_parallel_mock,
                 validate_and_filter_batch_mock,
                 normalize_articles_batch_mock,
                 score_quality_batch_mock,

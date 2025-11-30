@@ -10,8 +10,6 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel
 from temporalio import workflow
 
-from app.processors.fetchers.base import Article
-
 with workflow.unsafe.imports_passed_through():
     from loguru import logger
 
@@ -134,12 +132,21 @@ class DailyDigestWorkflow:
         summary_style = user_config.summary_style
 
         # Phase 1b: Fetch content from sources (parallel)
-        # Activity: fetch_sources_parallel (not yet implemented)
-        # Input: user_config.sources
-        # Output: list[Article] (raw articles from all sources)
-        # For now, use empty list until fetching is implemented
-        raw_articles: list[Article] = []
-        articles_fetched = len(raw_articles)
+        fetch_result = await workflow.execute_activity(
+            "fetch_sources_parallel",
+            sc.FetchSourcesParallelRequest(sources=user_config.sources),
+            start_to_close_timeout=timedelta(seconds=shared.MEDIUM_TIMEOUT),
+            retry_policy=shared.MEDIUM_RETRY_POLICY,
+        )
+        fetch_result = sc.FetchSourcesParallelResult.model_validate(fetch_result)
+        raw_articles = fetch_result.articles
+        articles_fetched = fetch_result.total_articles
+
+        # Log fetch metrics
+        if fetch_result.failed_sources > 0:
+            error_msg = f"Failed to fetch from {fetch_result.failed_sources}/{fetch_result.total_sources} sources"
+            error_messages.append(error_msg)
+            logger.warning(error_msg)
 
         # Phase 2: Validate and filter articles
         validation_result = await workflow.execute_activity(

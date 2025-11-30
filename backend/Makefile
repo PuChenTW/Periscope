@@ -50,7 +50,7 @@ clean:  ## Clean up temporary files
 	rm -rf .coverage htmlcov/ .pytest_cache/
 
 dev:  ## Start development environment
-	docker compose up -d postgres redis
+	docker compose up -d postgres redis temporal temporal-ui
 	uv run uvicorn app.main:create_app --host 0.0.0.0 --port 8000 --reload
 
 build:  ## Build Docker images
