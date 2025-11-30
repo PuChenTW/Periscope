@@ -23,3 +23,14 @@ class ProfileRepository:
         statement = select(InterestProfile).where(InterestProfile.config_id == config_id)
         result = await self.session.exec(statement)
         return result.one_or_none()
+
+    async def update(self, profile: InterestProfile) -> InterestProfile:
+        """
+        Update an existing interest profile.
+
+        Note: Caller must commit the session.
+        """
+        self.session.add(profile)
+        await self.session.flush()
+        await self.session.refresh(profile)
+        return profile

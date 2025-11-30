@@ -49,3 +49,20 @@ class ConfigRepository:
         stmt = select(InterestProfile).where(InterestProfile.config_id == config_id)
         result = await self.session.exec(stmt)
         return result.one_or_none()
+
+    async def get_by_user_id(self, user_id: str) -> DigestConfiguration | None:
+        """Fetch digest configuration by user ID."""
+        stmt = select(DigestConfiguration).where(DigestConfiguration.user_id == user_id)
+        result = await self.session.exec(stmt)
+        return result.one_or_none()
+
+    async def update(self, config: DigestConfiguration) -> DigestConfiguration:
+        """
+        Update an existing digest configuration.
+
+        Note: Caller must commit the session.
+        """
+        self.session.add(config)
+        await self.session.flush()
+        await self.session.refresh(config)
+        return config
