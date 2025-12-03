@@ -3,7 +3,7 @@
 from pydantic import BaseModel, ConfigDict
 
 
-class FrozenDTO(BaseModel):
+class FrozenBase(BaseModel):
     """
     Base class for all DTOs using Pydantic frozen models.
 

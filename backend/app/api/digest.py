@@ -2,57 +2,36 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+
+from app.dtos.digest import DeliveryLogEntryResponse, DigestPreviewResponse
 
 router = APIRouter()
-
-
-class Article(BaseModel):
-    title: str
-    summary: str
-    source_name: str
-    url: str
-    published_at: datetime
-
-
-class DigestPreview(BaseModel):
-    articles: list[Article]
-    total_count: int
-    generated_at: datetime
-
-
-class DeliveryLogEntry(BaseModel):
-    id: str
-    status: str
-    article_count: int | None
-    error_message: str | None
-    created_at: datetime
 
 
 async def get_current_user():
     return {"id": "mock_user_id_123", "email": "user@example.com"}
 
 
-@router.get("/preview", response_model=DigestPreview)
-async def get_digest_preview(current_user: Annotated[dict, Depends(get_current_user)]):
+@router.get("/preview", response_model=DigestPreviewResponse)
+async def get_digest_preview(current_user: Annotated[dict, Depends(get_current_user)]):  # noqa: ARG001
     mock_articles = [
         {
             "title": "AI Breakthrough in Language Models",
-            "summary": "Researchers have developed a new approach to training language models that reduces computational requirements by 40% while maintaining performance.",
+            "summary": "Researchers have developed a new approach to training language models that reduces computational requirements by 40% while maintaining performance.",  # noqa: E501
             "source_name": "Tech News Daily",
             "url": "https://example.com/ai-breakthrough",
             "published_at": datetime.now(UTC),
         },
         {
             "title": "Startup Funding Trends in 2024",
-            "summary": "Venture capital investment patterns show a shift towards sustainable technology and healthcare startups this year.",
+            "summary": "Venture capital investment patterns show a shift towards sustainable technology and healthcare startups this year.",  # noqa: E501
             "source_name": "Startup Weekly",
             "url": "https://example.com/funding-trends",
             "published_at": datetime.now(UTC),
         },
         {
             "title": "Remote Work Best Practices",
-            "summary": "New study reveals the most effective strategies for maintaining productivity and team collaboration in distributed teams.",
+            "summary": "New study reveals the most effective strategies for maintaining productivity and team collaboration in distributed teams.",  # noqa: E501
             "source_name": "Work & Life",
             "url": "https://example.com/remote-work",
             "published_at": datetime.now(UTC),
@@ -67,7 +46,7 @@ async def get_digest_preview(current_user: Annotated[dict, Depends(get_current_u
 
 
 @router.post("/send-now")
-async def send_digest_now(current_user: Annotated[dict, Depends(get_current_user)]):
+async def send_digest_now(current_user: Annotated[dict, Depends(get_current_user)]):  # noqa: ARG001
     return {
         "message": "Digest generation and delivery initiated (mock)",
         "status": "queued",
@@ -77,9 +56,9 @@ async def send_digest_now(current_user: Annotated[dict, Depends(get_current_user
 
 @router.get("/delivery-history")
 async def get_delivery_history(
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[dict, Depends(get_current_user)],  # noqa: ARG001
     limit: int = 10,
-) -> list[DeliveryLogEntry]:
+) -> list[DeliveryLogEntryResponse]:
     mock_history = [
         {
             "id": "delivery_1",

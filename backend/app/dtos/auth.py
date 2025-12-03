@@ -1,33 +1,34 @@
 """Authentication-related DTOs for registration, login, and token operations."""
 
 from pydantic import EmailStr, Field
+from pydantic_extra_types.timezone_name import TimeZoneName
 
-from app.dtos.base import FrozenDTO
+from app.dtos.base import FrozenBase
 
 
-class RegisterUserDTO(FrozenDTO):
+class RegisterUserRequest(FrozenBase):
     """Input DTO for user registration."""
 
     email: EmailStr
     password: str = Field(min_length=8)
-    timezone: str = Field(default="UTC")
+    timezone: TimeZoneName = Field(default="UTC")
 
 
-class LoginDTO(FrozenDTO):
+class LoginRequest(FrozenBase):
     """Input DTO for user login."""
 
     email: EmailStr
     password: str
 
 
-class TokenDTO(FrozenDTO):
+class TokenResponse(FrozenBase):
     """Output DTO for authentication token."""
 
     access_token: str
     token_type: str = Field(default="bearer")
 
 
-class UserAuthDTO(FrozenDTO):
+class UserAuthResponse(FrozenBase):
     """
     Output DTO for authenticated user data.
 

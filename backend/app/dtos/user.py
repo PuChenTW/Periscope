@@ -1,11 +1,12 @@
 """User profile-related DTOs."""
 
 from pydantic import EmailStr
+from pydantic_extra_types.timezone_name import TimeZoneName
 
-from app.dtos.base import FrozenDTO
+from app.dtos.base import FrozenBase
 
 
-class UserDTO(FrozenDTO):
+class UserResponse(FrozenBase):
     """
     Output DTO for user profile data.
 
@@ -19,7 +20,7 @@ class UserDTO(FrozenDTO):
     is_active: bool
 
 
-class UpdateTimezoneDTO(FrozenDTO):
+class UpdateTimezoneRequest(FrozenBase):
     """Input DTO for updating user timezone."""
 
-    timezone: str
+    timezone: TimeZoneName

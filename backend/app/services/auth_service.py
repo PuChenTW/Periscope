@@ -5,7 +5,7 @@ from datetime import time
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dtos.auth import LoginDTO, RegisterUserDTO, TokenDTO, UserAuthDTO
+from app.dtos.auth import LoginRequest, RegisterUserRequest, TokenResponse, UserAuthResponse
 from app.dtos.mappers import user_to_auth_dto
 from app.models.users import DigestConfiguration, InterestProfile, User
 from app.repositories.user_repository import UserRepository
@@ -19,7 +19,7 @@ class AuthService:
         self.session = session
         self.user_repo = UserRepository(session)
 
-    async def register_user(self, register_dto: RegisterUserDTO) -> UserAuthDTO:
+    async def register_user(self, register_dto: RegisterUserRequest) -> UserAuthResponse:
         """
         Register new user with default configuration and interest profile.
 
@@ -81,7 +81,7 @@ class AuthService:
 
         return user_to_auth_dto(created_user)
 
-    async def authenticate_user(self, login_dto: LoginDTO) -> tuple[UserAuthDTO, TokenDTO]:
+    async def authenticate_user(self, login_dto: LoginRequest) -> tuple[UserAuthResponse, TokenResponse]:
         """
         Authenticate user and return access token.
 
@@ -116,6 +116,6 @@ class AuthService:
             )
 
         access_token = create_access_token(user_id=user.id, email=user.email)
-        token_dto = TokenDTO(access_token=access_token)
+        token_dto = TokenResponse(access_token=access_token)
 
         return user_to_auth_dto(user), token_dto

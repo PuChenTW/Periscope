@@ -1,16 +1,20 @@
 """User management and profile configuration API endpoints."""
 
-from datetime import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel, EmailStr
-from pydantic_extra_types.timezone_name import TimeZoneName
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_session
-from app.dtos.config import CreateContentSourceDTO, UpdateDigestSettingsDTO, UpdateInterestKeywordsDTO
-from app.dtos.user import UpdateTimezoneDTO
+from app.dtos.config import (
+    ContentSourceResponse,
+    CreateContentSourceRequest,
+    DigestConfigResponse,
+    InterestProfileUpdateRequest,
+    UpdateDigestSettingsRequest,
+    UpdateInterestKeywordsRequest,
+)
+from app.dtos.user import UpdateTimezoneRequest, UserResponse
 from app.models.users import User
 from app.services.config_service import ConfigService
 from app.services.user_service import UserService
@@ -19,58 +23,13 @@ from app.utils.auth import get_current_user
 router = APIRouter()
 
 
-# Request/Response Models
-class UserProfile(BaseModel):
-    id: str
-    email: EmailStr
-    timezone: str
-    is_verified: bool
-    is_active: bool
-
-
-class UserProfileUpdate(BaseModel):
-    timezone: TimeZoneName
-
-
-class DigestConfigUpdate(BaseModel):
-    delivery_time: time
-    summary_style: str = "brief"
-    is_active: bool = True
-
-
-class ContentSourceCreate(BaseModel):
-    source_type: str
-    source_url: str
-    source_name: str
-
-
-class ContentSourceResponse(BaseModel):
-    id: str
-    source_type: str
-    source_url: str
-    source_name: str
-    is_active: bool
-
-
-class InterestProfileUpdate(BaseModel):
-    keywords: str  # Comma-separated keywords
-
-
-class DigestConfigResponse(BaseModel):
-    delivery_time: str
-    summary_style: str
-    is_active: bool
-    sources: list[ContentSourceResponse]
-    interest_profile: dict
-
-
 # User Profile Endpoints
-@router.get("/me", response_model=UserProfile)
+@router.get("/me", response_model=UserResponse)
 async def get_user_profile(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     """Get current user's profile information."""
-    return UserProfile(
+    return UserResponse(
         id=current_user.id,
         email=current_user.email,
         timezone=current_user.timezone,
@@ -79,18 +38,17 @@ async def get_user_profile(
     )
 
 
-@router.put("/me", response_model=UserProfile)
+@router.put("/me", response_model=UserResponse)
 async def update_user_profile(
-    profile_update: UserProfileUpdate,
+    profile_update: UpdateTimezoneRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
     """Update current user's timezone setting."""
     user_service = UserService(session)
-    update_dto = UpdateTimezoneDTO(timezone=profile_update.timezone)
-    user_dto = await user_service.update_timezone(current_user, update_dto)
+    user_dto = await user_service.update_timezone(current_user, profile_update)
 
-    return UserProfile(
+    return UserResponse(
         id=user_dto.id,
         email=user_dto.email,
         timezone=user_dto.timezone,
@@ -109,17 +67,6 @@ async def get_digest_config(
     config_service = ConfigService(session)
     complete_config_dto = await config_service.get_user_config(current_user.id)
 
-    sources_response = [
-        ContentSourceResponse(
-            id=source.id,
-            source_type=source.source_type,
-            source_url=source.source_url,
-            source_name=source.source_name,
-            is_active=source.is_active,
-        )
-        for source in complete_config_dto.sources
-    ]
-
     keywords_str = (
         ", ".join(complete_config_dto.interest_profile.keywords)
         if complete_config_dto.interest_profile.keywords
@@ -130,25 +77,20 @@ async def get_digest_config(
         delivery_time=complete_config_dto.config.delivery_time.isoformat(),
         summary_style=complete_config_dto.config.summary_style,
         is_active=complete_config_dto.config.is_active,
-        sources=sources_response,
+        sources=complete_config_dto.sources,
         interest_profile={"keywords": keywords_str},
     )
 
 
 @router.put("/config", response_model=dict)
 async def update_digest_config(
-    config_update: DigestConfigUpdate,
+    config_update: UpdateDigestSettingsRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
     """Update user's digest configuration settings."""
     config_service = ConfigService(session)
-    update_dto = UpdateDigestSettingsDTO(
-        delivery_time=config_update.delivery_time,
-        summary_style=config_update.summary_style,
-        is_active=config_update.is_active,
-    )
-    config_dto = await config_service.update_digest_settings(current_user.id, update_dto)
+    config_dto = await config_service.update_digest_settings(current_user.id, config_update)
 
     return {
         "message": "Digest configuration updated successfully",
@@ -163,18 +105,13 @@ async def update_digest_config(
 # Content Source Endpoints
 @router.post("/sources", response_model=ContentSourceResponse, status_code=status.HTTP_201_CREATED)
 async def add_content_source(
-    source_data: ContentSourceCreate,
+    source_data: CreateContentSourceRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
     """Add a new content source to user's digest configuration."""
     config_service = ConfigService(session)
-    create_dto = CreateContentSourceDTO(
-        source_type=source_data.source_type,
-        source_url=source_data.source_url,
-        source_name=source_data.source_name,
-    )
-    source_dto = await config_service.add_content_source(current_user.id, create_dto)
+    source_dto = await config_service.add_content_source(current_user.id, source_data)
 
     return ContentSourceResponse(
         id=source_dto.id,
@@ -204,14 +141,14 @@ async def remove_content_source(
 # Interest Profile Endpoint
 @router.put("/interest-profile", response_model=dict)
 async def update_interest_profile(
-    profile_update: InterestProfileUpdate,
+    profile_update: InterestProfileUpdateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
     """Update user's interest profile keywords."""
     config_service = ConfigService(session)
     keywords_list = [kw.strip() for kw in profile_update.keywords.split(",") if kw.strip()]
-    update_dto = UpdateInterestKeywordsDTO(keywords=keywords_list)
+    update_dto = UpdateInterestKeywordsRequest(keywords=keywords_list)
     profile_dto = await config_service.update_interest_keywords(current_user.id, update_dto)
 
     return {

@@ -7,9 +7,9 @@ from fastapi import HTTPException
 from sqlmodel import select
 
 from app.dtos.config import (
-    CreateContentSourceDTO,
-    UpdateDigestSettingsDTO,
-    UpdateInterestKeywordsDTO,
+    CreateContentSourceRequest,
+    UpdateDigestSettingsRequest,
+    UpdateInterestKeywordsRequest,
 )
 from app.models.users import ContentSource, DigestConfiguration, InterestProfile, User
 from app.services.config_service import ConfigService
@@ -100,7 +100,7 @@ async def test_update_digest_settings_success(async_session):
     await async_session.commit()
 
     service = ConfigService(async_session)
-    update_dto = UpdateDigestSettingsDTO(
+    update_dto = UpdateDigestSettingsRequest(
         delivery_time=time(9, 30),
         summary_style="detailed",
         is_active=False,
@@ -116,7 +116,7 @@ async def test_update_digest_settings_success(async_session):
 async def test_update_digest_settings_not_found(async_session):
     """Test error when updating non-existent configuration."""
     service = ConfigService(async_session)
-    update_dto = UpdateDigestSettingsDTO(
+    update_dto = UpdateDigestSettingsRequest(
         delivery_time=time(9, 0),
         summary_style="brief",
         is_active=True,
@@ -151,7 +151,7 @@ async def test_add_content_source_success(async_session):
     await async_session.commit()
 
     service = ConfigService(async_session)
-    create_dto = CreateContentSourceDTO(
+    create_dto = CreateContentSourceRequest(
         source_type="blog",
         source_url="https://blog.example.com",
         source_name="Example Blog",
@@ -168,7 +168,7 @@ async def test_add_content_source_success(async_session):
 async def test_add_content_source_config_not_found(async_session):
     """Test error when adding source to non-existent configuration."""
     service = ConfigService(async_session)
-    create_dto = CreateContentSourceDTO(
+    create_dto = CreateContentSourceRequest(
         source_type="rss",
         source_url="https://example.com",
         source_name="Test",
@@ -287,7 +287,7 @@ async def test_update_interest_keywords_success(async_session):
 
     service = ConfigService(async_session)
     keywords_list = ["python", "javascript", "rust", "golang"]
-    update_dto = UpdateInterestKeywordsDTO(keywords=keywords_list)
+    update_dto = UpdateInterestKeywordsRequest(keywords=keywords_list)
     profile_dto = await service.update_interest_keywords(user.id, update_dto)
 
     assert len(profile_dto.keywords) == 4
@@ -331,7 +331,7 @@ async def test_update_interest_keywords_strips_whitespace(async_session):
     service = ConfigService(async_session)
     keywords_str = "  python  ,  javascript  , , rust,  "
     keywords_list = [kw.strip() for kw in keywords_str.split(",") if kw.strip()]
-    update_dto = UpdateInterestKeywordsDTO(keywords=keywords_list)
+    update_dto = UpdateInterestKeywordsRequest(keywords=keywords_list)
     profile_dto = await service.update_interest_keywords(user.id, update_dto)
 
     assert len(profile_dto.keywords) == 3
@@ -373,7 +373,7 @@ async def test_update_interest_keywords_too_many(async_session):
     keywords_list = [f"keyword{i}" for i in range(51)]
 
     service = ConfigService(async_session)
-    update_dto = UpdateInterestKeywordsDTO(keywords=keywords_list)
+    update_dto = UpdateInterestKeywordsRequest(keywords=keywords_list)
 
     with pytest.raises(HTTPException) as exc_info:
         await service.update_interest_keywords(user.id, update_dto)
@@ -407,7 +407,7 @@ async def test_update_interest_keywords_profile_not_found(async_session):
 
     service = ConfigService(async_session)
     keywords_list = ["python", "rust"]
-    update_dto = UpdateInterestKeywordsDTO(keywords=keywords_list)
+    update_dto = UpdateInterestKeywordsRequest(keywords=keywords_list)
 
     with pytest.raises(HTTPException) as exc_info:
         await service.update_interest_keywords(user.id, update_dto)

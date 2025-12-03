@@ -3,7 +3,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dtos.mappers import user_to_dto
-from app.dtos.user import UpdateTimezoneDTO, UserDTO
+from app.dtos.user import UpdateTimezoneRequest, UserResponse
 from app.models.users import User
 from app.repositories.user_repository import UserRepository
 
@@ -15,7 +15,7 @@ class UserService:
         self.session = session
         self.user_repo = UserRepository(session)
 
-    async def update_timezone(self, user: User, update_dto: UpdateTimezoneDTO) -> UserDTO:
+    async def update_timezone(self, user: User, update_dto: UpdateTimezoneRequest) -> UserResponse:
         """
         Update user timezone setting.
 

@@ -6,7 +6,7 @@ import pytest
 from fastapi import HTTPException
 from sqlmodel import select
 
-from app.dtos.auth import LoginDTO, RegisterUserDTO
+from app.dtos.auth import LoginRequest, RegisterUserRequest
 from app.models.users import DigestConfiguration, InterestProfile, User
 from app.services.auth_service import AuthService
 from app.utils.auth import get_password_hash, verify_password
@@ -16,7 +16,7 @@ from app.utils.auth import get_password_hash, verify_password
 async def test_register_user_success(async_session):
     """Test successful user registration with default config."""
     service = AuthService(async_session)
-    register_dto = RegisterUserDTO(
+    register_dto = RegisterUserRequest(
         email="newuser@example.com",
         password="password123",
         timezone="America/New_York",
@@ -40,7 +40,7 @@ async def test_register_user_success(async_session):
 async def test_register_user_creates_default_config(async_session):
     """Test that registration creates default DigestConfiguration."""
     service = AuthService(async_session)
-    register_dto = RegisterUserDTO(
+    register_dto = RegisterUserRequest(
         email="withconfig@example.com",
         password="password123",
         timezone="UTC",
@@ -62,7 +62,7 @@ async def test_register_user_creates_default_config(async_session):
 async def test_register_user_creates_interest_profile(async_session):
     """Test that registration creates empty InterestProfile."""
     service = AuthService(async_session)
-    register_dto = RegisterUserDTO(
+    register_dto = RegisterUserRequest(
         email="withprofile@example.com",
         password="password123",
         timezone="UTC",
@@ -89,7 +89,7 @@ async def test_register_user_creates_interest_profile(async_session):
 async def test_register_user_email_lowercase(async_session):
     """Test that email is converted to lowercase."""
     service = AuthService(async_session)
-    register_dto = RegisterUserDTO(
+    register_dto = RegisterUserRequest(
         email="UPPERCASE@EXAMPLE.COM",
         password="password123",
         timezone="UTC",
@@ -106,7 +106,7 @@ async def test_register_user_duplicate_email(async_session):
     service = AuthService(async_session)
 
     # Register first user
-    register_dto1 = RegisterUserDTO(
+    register_dto1 = RegisterUserRequest(
         email="duplicate@example.com",
         password="password123",
         timezone="UTC",
@@ -114,7 +114,7 @@ async def test_register_user_duplicate_email(async_session):
     await service.register_user(register_dto1)
 
     # Attempt to register with same email
-    register_dto2 = RegisterUserDTO(
+    register_dto2 = RegisterUserRequest(
         email="duplicate@example.com",
         password="different",
         timezone="UTC",
@@ -131,14 +131,14 @@ async def test_register_user_duplicate_email_case_insensitive(async_session):
     """Test that duplicate check is case-insensitive."""
     service = AuthService(async_session)
 
-    register_dto1 = RegisterUserDTO(
+    register_dto1 = RegisterUserRequest(
         email="case@example.com",
         password="password123",
         timezone="UTC",
     )
     await service.register_user(register_dto1)
 
-    register_dto2 = RegisterUserDTO(
+    register_dto2 = RegisterUserRequest(
         email="CASE@EXAMPLE.COM",
         password="different",
         timezone="UTC",
@@ -164,7 +164,7 @@ async def test_authenticate_user_success(async_session):
     await async_session.commit()
 
     service = AuthService(async_session)
-    login_dto = LoginDTO(email="auth@example.com", password="correctpassword")
+    login_dto = LoginRequest(email="auth@example.com", password="correctpassword")
     user_dto, token_dto = await service.authenticate_user(login_dto)
 
     assert user_dto.id == user.id
@@ -189,7 +189,7 @@ async def test_authenticate_user_email_case_insensitive(async_session):
     await async_session.commit()
 
     service = AuthService(async_session)
-    login_dto = LoginDTO(email="CASE@EXAMPLE.COM", password="password123")
+    login_dto = LoginRequest(email="CASE@EXAMPLE.COM", password="password123")
     user_dto, token_dto = await service.authenticate_user(login_dto)
 
     assert user_dto.email == "case@example.com"
@@ -200,7 +200,7 @@ async def test_authenticate_user_email_case_insensitive(async_session):
 async def test_authenticate_user_invalid_email(async_session):
     """Test error when email doesn't exist."""
     service = AuthService(async_session)
-    login_dto = LoginDTO(email="nonexistent@example.com", password="anypassword")
+    login_dto = LoginRequest(email="nonexistent@example.com", password="anypassword")
 
     with pytest.raises(HTTPException) as exc_info:
         await service.authenticate_user(login_dto)
@@ -223,7 +223,7 @@ async def test_authenticate_user_wrong_password(async_session):
     await async_session.commit()
 
     service = AuthService(async_session)
-    login_dto = LoginDTO(email="wrongpass@example.com", password="wrongpassword")
+    login_dto = LoginRequest(email="wrongpass@example.com", password="wrongpassword")
 
     with pytest.raises(HTTPException) as exc_info:
         await service.authenticate_user(login_dto)
@@ -246,7 +246,7 @@ async def test_authenticate_user_inactive_account(async_session):
     await async_session.commit()
 
     service = AuthService(async_session)
-    login_dto = LoginDTO(email="inactive@example.com", password="password123")
+    login_dto = LoginRequest(email="inactive@example.com", password="password123")
 
     with pytest.raises(HTTPException) as exc_info:
         await service.authenticate_user(login_dto)
@@ -261,7 +261,7 @@ async def test_register_user_atomic_transaction(async_session):
     service = AuthService(async_session)
 
     # This test verifies that if registration succeeds, all related records are created
-    register_dto = RegisterUserDTO(
+    register_dto = RegisterUserRequest(
         email="atomic@example.com",
         password="password123",
         timezone="UTC",

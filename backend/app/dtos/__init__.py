@@ -1,33 +1,33 @@
 """Data Transfer Objects for API and service layer communication."""
 
-from app.dtos.auth import LoginDTO, RegisterUserDTO, TokenDTO, UserAuthDTO
-from app.dtos.base import FrozenDTO
+from app.dtos.auth import LoginRequest, RegisterUserRequest, TokenResponse, UserAuthResponse
+from app.dtos.base import FrozenBase
 from app.dtos.config import (
-    ContentSourceDTO,
-    CreateContentSourceDTO,
-    DigestConfigDTO,
-    InterestProfileDTO,
-    UpdateDigestSettingsDTO,
-    UpdateInterestKeywordsDTO,
+    ContentSourceResponse,
+    CreateContentSourceRequest,
+    DigestConfigResponse,
+    InterestProfileResponse,
+    UpdateDigestSettingsRequest,
+    UpdateInterestKeywordsRequest,
 )
-from app.dtos.user import UpdateTimezoneDTO, UserDTO
+from app.dtos.user import UpdateTimezoneRequest, UserResponse
 
 __all__ = [  # noqa: RUF022
     # Base
-    "FrozenDTO",
+    "FrozenBase",
     # Auth DTOs
-    "RegisterUserDTO",
-    "LoginDTO",
-    "TokenDTO",
-    "UserAuthDTO",
+    "RegisterUserRequest",
+    "LoginRequest",
+    "TokenResponse",
+    "UserAuthResponse",
     # User DTOs
-    "UserDTO",
-    "UpdateTimezoneDTO",
+    "UserResponse",
+    "UpdateTimezoneRequest",
     # Config DTOs
-    "DigestConfigDTO",
-    "ContentSourceDTO",
-    "InterestProfileDTO",
-    "CreateContentSourceDTO",
-    "UpdateDigestSettingsDTO",
-    "UpdateInterestKeywordsDTO",
+    "DigestConfigResponse",
+    "ContentSourceResponse",
+    "InterestProfileResponse",
+    "CreateContentSourceRequest",
+    "UpdateDigestSettingsRequest",
+    "UpdateInterestKeywordsRequest",
 ]

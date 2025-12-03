@@ -4,13 +4,13 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dtos.config import (
-    CompleteDigestConfigDTO,
-    ContentSourceDTO,
-    CreateContentSourceDTO,
-    DigestConfigDTO,
-    InterestProfileDTO,
-    UpdateDigestSettingsDTO,
-    UpdateInterestKeywordsDTO,
+    CompleteDigestConfigResponse,
+    ContentSourceResponse,
+    CreateContentSourceRequest,
+    DigestSettingsResponse,
+    InterestProfileResponse,
+    UpdateDigestSettingsRequest,
+    UpdateInterestKeywordsRequest,
 )
 from app.dtos.mappers import (
     complete_digest_config_to_dto,
@@ -33,7 +33,7 @@ class ConfigService:
         self.source_repo = ContentSourceRepository(session)
         self.profile_repo = ProfileRepository(session)
 
-    async def get_user_config(self, user_id: str) -> CompleteDigestConfigDTO:
+    async def get_user_config(self, user_id: str) -> CompleteDigestConfigResponse:
         """
         Fetch complete configuration for user.
 
@@ -67,8 +67,8 @@ class ConfigService:
     async def update_digest_settings(
         self,
         user_id: str,
-        update_dto: UpdateDigestSettingsDTO,
-    ) -> DigestConfigDTO:
+        update_dto: UpdateDigestSettingsRequest,
+    ) -> DigestSettingsResponse:
         """
         Update digest configuration settings.
 
@@ -104,8 +104,8 @@ class ConfigService:
     async def add_content_source(
         self,
         user_id: str,
-        create_dto: CreateContentSourceDTO,
-    ) -> ContentSourceDTO:
+        create_dto: CreateContentSourceRequest,
+    ) -> ContentSourceResponse:
         """
         Add new content source to user's configuration.
 
@@ -177,8 +177,8 @@ class ConfigService:
     async def update_interest_keywords(
         self,
         user_id: str,
-        update_dto: UpdateInterestKeywordsDTO,
-    ) -> InterestProfileDTO:
+        update_dto: UpdateInterestKeywordsRequest,
+    ) -> InterestProfileResponse:
         """
         Update user's interest profile keywords.
 

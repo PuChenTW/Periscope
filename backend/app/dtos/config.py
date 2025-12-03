@@ -4,10 +4,10 @@ from datetime import time
 
 from pydantic import Field, HttpUrl
 
-from app.dtos.base import FrozenDTO
+from app.dtos.base import FrozenBase
 
 
-class UpdateDigestSettingsDTO(FrozenDTO):
+class UpdateDigestSettingsRequest(FrozenBase):
     """Input DTO for updating digest configuration settings."""
 
     delivery_time: time
@@ -15,7 +15,7 @@ class UpdateDigestSettingsDTO(FrozenDTO):
     is_active: bool
 
 
-class DigestConfigDTO(FrozenDTO):
+class DigestSettingsResponse(FrozenBase):
     """
     Output DTO for digest configuration.
 
@@ -27,7 +27,7 @@ class DigestConfigDTO(FrozenDTO):
     is_active: bool
 
 
-class CreateContentSourceDTO(FrozenDTO):
+class CreateContentSourceRequest(FrozenBase):
     """Input DTO for creating a new content source."""
 
     source_type: str
@@ -35,7 +35,7 @@ class CreateContentSourceDTO(FrozenDTO):
     source_name: str = Field(min_length=1)
 
 
-class ContentSourceDTO(FrozenDTO):
+class ContentSourceResponse(FrozenBase):
     """
     Output DTO for content source.
 
@@ -49,7 +49,7 @@ class ContentSourceDTO(FrozenDTO):
     is_active: bool
 
 
-class InterestProfileDTO(FrozenDTO):
+class InterestProfileResponse(FrozenBase):
     """
     Output DTO for interest profile.
 
@@ -61,19 +61,35 @@ class InterestProfileDTO(FrozenDTO):
     boost_factor: float = Field(ge=0.5, le=2.0)
 
 
-class UpdateInterestKeywordsDTO(FrozenDTO):
+class UpdateInterestKeywordsRequest(FrozenBase):
     """Input DTO for updating interest profile keywords."""
 
     keywords: list[str]
 
 
-class CompleteDigestConfigDTO(FrozenDTO):
+class CompleteDigestConfigResponse(FrozenBase):
     """
     Composite output DTO containing full digest configuration.
 
     Combines config, sources, and interest profile for single API response.
     """
 
-    config: DigestConfigDTO
-    sources: list[ContentSourceDTO]
-    interest_profile: InterestProfileDTO
+    config: DigestSettingsResponse
+    sources: list[ContentSourceResponse]
+    interest_profile: InterestProfileResponse
+
+
+class InterestProfileUpdateRequest(FrozenBase):
+    """Input DTO for updating interest profile keywords (comma-separated string)."""
+
+    keywords: str
+
+
+class DigestConfigResponse(FrozenBase):
+    """Output DTO for digest configuration (flattened structure)."""
+
+    delivery_time: str
+    summary_style: str
+    is_active: bool
+    sources: list[ContentSourceResponse]
+    interest_profile: dict

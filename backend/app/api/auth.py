@@ -3,44 +3,19 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel, EmailStr, Field
-from pydantic_extra_types.timezone_name import TimeZoneName
+from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_session
-from app.dtos.auth import LoginDTO, RegisterUserDTO
+from app.dtos.auth import LoginRequest, RegisterUserRequest, TokenResponse, UserAuthResponse
 from app.services.auth_service import AuthService
 
 router = APIRouter()
 
 
-class UserRegister(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=8)
-    timezone: TimeZoneName = Field(default="UTC")
-
-
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-
-class UserProfile(BaseModel):
-    id: str
-    email: EmailStr
-    timezone: str
-    is_verified: bool
-    is_active: bool
-
-
-@router.post("/register", response_model=UserProfile, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=UserAuthResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(
-    user_data: UserRegister,
+    user_data: RegisterUserRequest,
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
     """
@@ -52,14 +27,9 @@ async def register_user(
     - Empty InterestProfile
     """
     auth_service = AuthService(session)
-    register_dto = RegisterUserDTO(
-        email=user_data.email,
-        password=user_data.password,
-        timezone=user_data.timezone,
-    )
-    user_dto = await auth_service.register_user(register_dto)
+    user_dto = await auth_service.register_user(user_data)
 
-    return UserProfile(
+    return UserAuthResponse(
         id=user_dto.id,
         email=user_dto.email,
         timezone=user_dto.timezone,
@@ -70,7 +40,7 @@ async def register_user(
 
 @router.post("/login", response_model=TokenResponse)
 async def login_user(
-    credentials: UserLogin,
+    credentials: LoginRequest,
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
     """
@@ -80,8 +50,7 @@ async def login_user(
     Authorization: Bearer <token>
     """
     auth_service = AuthService(session)
-    login_dto = LoginDTO(email=credentials.email, password=credentials.password)
-    _, token_dto = await auth_service.authenticate_user(login_dto)
+    _, token_dto = await auth_service.authenticate_user(credentials)
 
     return TokenResponse(access_token=token_dto.access_token)
 
