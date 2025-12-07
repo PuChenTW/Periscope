@@ -24,13 +24,3 @@ repos:
       # Run the formatter
       - id: ruff-format
         files: ^backend/
-
-  - repo: local
-    hooks:
-      - id: update-coverage-badge
-        name: Update coverage badge
-        entry: python3 backend/scripts/update_coverage_badge.py
-        language: system
-        pass_filenames: false
-        files: ^backend/(app|tests)/.*\.py$
-        stages: [pre-push]
