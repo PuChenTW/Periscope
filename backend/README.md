@@ -34,6 +34,11 @@ This is the Phase 1 MVP backend for the Personal Daily Reading Digest platform, 
   - Configurable max topics limit (default: 5)
   - Article model enhanced with ai_topics field
   - Comprehensive test suite (19 tests passing)
+- **Temporal Workflow Orchestration** (✅ **CORE PIPELINE READY**)
+  - `daily_digest` workflow implemented with 11-step pipeline
+  - Parallel source fetching and batch processing activities
+  - Integrated AI processing (Quality, Topics, Relevance, Summary)
+  - Similarity detection and grouping integration
 - Docker development environment
 - Basic testing setup
 - Alembic migrations (ready for database setup)
@@ -205,10 +210,10 @@ docker compose up -d  # All services in containers
 Phase 1+ provides complete content processing foundation. Phase 2 will add:
 
 - Business service layer implementation
-- AI-powered summarization and relevance scoring
-- Temporal workflow implementation for digest generation
+- AI-powered summarization and relevance scoring (Implemented in Workflow)
+- Temporal workflow implementation for digest generation (Core Implemented)
 - Redis cache integration
-- Email delivery service
+- Email delivery service (Real integration pending)
 
 ## Environment Variables
 

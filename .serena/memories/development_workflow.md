@@ -7,13 +7,18 @@
 - **Main Branch**: `main` (stable, production-ready)
 - **Platform**: Darwin (macOS)
 
-### Recent Activity (last 5 commits)
+### Recent Activity (last 10 commits as of 2025-12-01)
 
-1. `c7b1268` - fix: Update test coverage badge to reflect current coverage percentage
-2. `1feee49` - docs: Mark Phase 4 complete and document batch processing activities implementation
-3. `5dc22d9` - feat: Implement ProcessingActivities class with 5 batch processing activities and workflow integration
-4. `f983476` - refactor: Extract validation logic from normalizer into dedicated ContentValidator class
-5. `ae4c1f9` - fix: Update test coverage badge to reflect current coverage percentage
+1. `5c4e5af` - chore: remove outdated processor documentation and test script
+2. `5f91604` - feat: implement user APIs
+3. `f4e136e` - feat: install brevo and add test script
+4. `bb5de32` - feat: implement fetch content activity
+5. `0e83682` - fix: Improve HTTPClient request handling and add response processing
+6. `2ca779f` - feat: Add test scripts for AssemblyActivities to validate digest assembly process
+7. `025dae4` - chore: Remove markdownlint hook from pre-commit configuration
+8. `19ea081` - fix: Update test coverage badge to reflect current coverage status
+9. `5c1c6ba` - feat: Add unit tests for content fetching activities and mock user configuration workflow
+10. `322900c` - feat: Enhance caching mechanism with new key generation utilities and improve summarization settings
 
 ### Working with Git
 

@@ -102,11 +102,11 @@ frontend/                               # Vue/Svelte frontend (separate)
 - `app/processors/similarity_detector.py`: Semantic similarity + grouping
 - `app/processors/topic_extractor.py`: Extract key topics from articles
 
-### Temporal Workflows (Phase 2+)
+### Temporal Workflows
 
-- `app/temporal/workflows.py`: Main workflow orchestration
+- `app/temporal/workflows.py`: Main workflow orchestration (Core `daily_digest` pipeline implemented)
 - `app/temporal/worker.py`: Worker setup and initialization
-- `app/temporal/activities/`: Activity implementations
+- `app/temporal/activities/`: Activity implementations (Fetching, Processing, Digest assembly)
 
 ### Caching
 

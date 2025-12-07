@@ -8,7 +8,6 @@
 | `backend/docs/configuration.md` | adding env vars or checking settings defaults/usage. |
 | `backend/docs/operations.md` | planning caching/monitoring/security work. |
 | `backend/docs/testing-strategy.md` | deciding how/where to add tests or reading coverage expectations. |
-| `backend/docs/processors/` | modifying processors in `app/processors/`. |
 | `backend/docs/plan_status/status_board.md` | checking active workstreams or historical context. |
 | `backend/docs/design-patterns.md` | core design prcinple |
 

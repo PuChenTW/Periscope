@@ -1,0 +1,1 @@
+Call mcp__serena__check_onboarding_performed
