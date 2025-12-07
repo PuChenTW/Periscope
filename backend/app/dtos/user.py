@@ -20,7 +20,7 @@ class UserResponse(FrozenBase):
     is_active: bool
 
 
-class UpdateTimezoneRequest(FrozenBase):
-    """Input DTO for updating user timezone."""
+class UpdateProfileRequest(FrozenBase):
+    """Input DTO for updating user profile."""
 
     timezone: TimeZoneName

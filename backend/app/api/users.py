@@ -14,7 +14,7 @@ from app.dtos.config import (
     UpdateDigestSettingsRequest,
     UpdateInterestKeywordsRequest,
 )
-from app.dtos.user import UpdateTimezoneRequest, UserResponse
+from app.dtos.user import UpdateProfileRequest, UserResponse
 from app.models.users import User
 from app.services.config_service import ConfigService
 from app.services.user_service import UserService
@@ -40,7 +40,7 @@ async def get_user_profile(
 
 @router.put("/me", response_model=UserResponse)
 async def update_user_profile(
-    profile_update: UpdateTimezoneRequest,
+    profile_update: UpdateProfileRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
 ):

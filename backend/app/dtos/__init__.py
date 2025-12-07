@@ -10,7 +10,7 @@ from app.dtos.config import (
     UpdateDigestSettingsRequest,
     UpdateInterestKeywordsRequest,
 )
-from app.dtos.user import UpdateTimezoneRequest, UserResponse
+from app.dtos.user import UpdateProfileRequest, UserResponse
 
 __all__ = [  # noqa: RUF022
     # Base
@@ -22,7 +22,7 @@ __all__ = [  # noqa: RUF022
     "UserAuthResponse",
     # User DTOs
     "UserResponse",
-    "UpdateTimezoneRequest",
+    "UpdateProfileRequest",
     # Config DTOs
     "DigestConfigResponse",
     "ContentSourceResponse",

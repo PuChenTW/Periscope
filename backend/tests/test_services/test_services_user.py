@@ -3,7 +3,7 @@
 import pytest
 from sqlmodel import select
 
-from app.dtos.user import UpdateTimezoneRequest
+from app.dtos.user import UpdateProfileRequest
 from app.models.users import User
 from app.services.user_service import UserService
 from app.utils.auth import get_password_hash
@@ -24,7 +24,7 @@ async def test_update_timezone_success(async_session):
     await async_session.refresh(user)
 
     service = UserService(async_session)
-    update_dto = UpdateTimezoneRequest(timezone="America/New_York")
+    update_dto = UpdateProfileRequest(timezone="America/New_York")
     user_dto = await service.update_timezone(user, update_dto)
 
     assert user_dto.timezone == "America/New_York"
@@ -48,7 +48,7 @@ async def test_update_timezone_persists(async_session):
     user_id = user.id
 
     service = UserService(async_session)
-    update_dto = UpdateTimezoneRequest(timezone="Europe/London")
+    update_dto = UpdateProfileRequest(timezone="Europe/London")
     await service.update_timezone(user, update_dto)
 
     # Verify persistence by fetching fresh instance
